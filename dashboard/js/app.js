@@ -14,7 +14,8 @@
   let reconnectDelay = 1000;
   const MAX_RECONNECT_DELAY = 30000;
   let startTime = Date.now();
-  let equityChart, drawdownChart, pnlDistChart;
+  let equityChart, drawdownChart, pnlDistChart, regimePerfChart;
+  let allTrades = [];
   let lastFactors = null;
   let isPaused = false;
   let activityCount = 0;
@@ -30,6 +31,7 @@
     equityChart = new EquityChart('equity-chart');
     drawdownChart = new DrawdownChart('drawdown-chart');
     pnlDistChart = new PnLDistribution('pnl-dist-chart');
+    regimePerfChart = new RegimePerfChart('regime-perf-chart');
 
     connectWebSocket();
     fetchInitialData();
@@ -177,7 +179,10 @@
       ]);
 
       if (status) updateFullStatus(status.data || status);
-      if (trades) renderTradeHistory(trades.data || (Array.isArray(trades) ? trades : trades.trades || []));
+      if (trades) {
+        allTrades = trades.data || (Array.isArray(trades) ? trades : trades.trades || []);
+        renderTradeHistory(allTrades);
+      }
       if (equity) {
         const eqArr = Array.isArray(equity) ? equity : equity.data || equity.values || [];
         equityChart.setData(eqArr);
@@ -192,8 +197,8 @@
       if (readiness) renderReadinessChecklist(readiness.data || readiness);
 
       if (trades) {
-        const tArr = trades.data || (Array.isArray(trades) ? trades : trades.trades || []);
-        buildPnLDistribution(tArr);
+        buildPnLDistribution(allTrades);
+        regimePerfChart.setData(allTrades);
       }
     } catch (e) {
       addActivity('warning', 'API not available — loading demo data');
@@ -455,18 +460,13 @@
     const pnl = data.pnl || data.realized_pnl || 0;
     addActivity('trade', 'Closed ' + UI.sideLabel(data.side) + ' ' + (data.pair || 'BTC/USDT') + ' P&L: ' + UI.formatPnl(pnl));
 
-    // Add to history
-    const tbody = $('history-body');
-    const empty = $('history-empty');
-    if (tbody) {
-      const row = UI.createHistoryRow(data);
-      tbody.prepend(row);
-    }
-    if (empty) empty.style.display = 'none';
-    updateHistoryCount();
+    // Add to history list
+    allTrades.unshift(data);
+    renderTradeHistory(allTrades);
 
-    // Update P&L distribution
-    pnlDistChart.addPoint(pnl);
+    // Update charts
+    buildPnLDistribution(allTrades);
+    regimePerfChart.setData(allTrades);
 
     // Refresh balance etc. if provided
     if (data.balance != null) {
@@ -516,6 +516,7 @@
       checklist.forEach((item) => {
         const itemEl = document.createElement('div');
         itemEl.className = 'readiness-item ' + (item.passed ? 'passed' : 'failed');
+        itemEl.setAttribute('title', item.why || '');
         const statusIcon = item.passed ? '✅' : '❌';
         itemEl.innerHTML = `
           <div class="readiness-item-main">
@@ -564,7 +565,15 @@
       if (empty) empty.style.display = '';
     } else {
       if (empty) empty.style.display = 'none';
-      trades.forEach((trade) => {
+      
+      // Sort trades descending: latest trade (closed_at or opened_at) first
+      const sortedTrades = [...trades].sort((a, b) => {
+        const timeA = new Date(a.closed_at || a.opened_at || 0).getTime();
+        const timeB = new Date(b.closed_at || b.opened_at || 0).getTime();
+        return timeB - timeA;
+      });
+
+      sortedTrades.forEach((trade) => {
         tbody.appendChild(UI.createHistoryRow(trade));
       });
     }
@@ -796,8 +805,10 @@
         regime: regimes[Math.floor(Math.random() * regimes.length)],
       });
     }
-    renderTradeHistory(demoTrades);
-    buildPnLDistribution(demoTrades);
+    allTrades = demoTrades;
+    renderTradeHistory(allTrades);
+    buildPnLDistribution(allTrades);
+    regimePerfChart.setData(allTrades);
 
     // Demo positions
     const demoPositions = [

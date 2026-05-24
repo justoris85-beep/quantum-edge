@@ -530,10 +530,126 @@
     }
   }
 
+  /* ============================================================
+     REGIME PERFORMANCE CHART — Bar chart comparing P&L by regime
+     ============================================================ */
+  class RegimePerfChart {
+    constructor(canvasId) {
+      this.canvas = document.getElementById(canvasId);
+      this.data = { trending: 0, ranging: 0, volatile: 0 };
+      this._bind();
+    }
+
+    _bind() {
+      const ro = new ResizeObserver(() => this.render());
+      ro.observe(this.canvas.parentElement);
+    }
+
+    setData(trades) {
+      const pnlByRegime = { trending: 0, ranging: 0, volatile: 0 };
+      trades.forEach((t) => {
+        const regime = String(t.regime || t.regime_at_entry || 'ranging').toLowerCase();
+        const pnl = t.pnl || t.realized_pnl || 0;
+        if (regime.includes('trend')) pnlByRegime.trending += pnl;
+        else if (regime.includes('volat')) pnlByRegime.volatile += pnl;
+        else pnlByRegime.ranging += pnl;
+      });
+      this.data = pnlByRegime;
+      this.render();
+    }
+
+    render() {
+      if (!this.canvas.parentElement) return;
+      const { ctx, w, h } = setupCanvas(this.canvas);
+
+      const pad = { top: 20, right: 20, bottom: 30, left: 50 };
+      const cw = w - pad.left - pad.right;
+      const ch = h - pad.top - pad.bottom;
+
+      const keys = ['Trending', 'Ranging', 'Volatile'];
+      const vals = [this.data.trending, this.data.ranging, this.data.volatile];
+
+      const maxVal = Math.max(...vals.map(Math.abs), 10);
+      const { min: yMin, max: yMax, steps } = niceSteps(-maxVal, maxVal, 4);
+      const yRange = yMax - yMin || 1;
+
+      const toY = (v) => pad.top + ch - ((v - yMin) / yRange) * ch;
+      const zeroY = toY(0);
+
+      // Grid
+      ctx.lineWidth = 1;
+      steps.forEach(sv => {
+        const y = toY(sv);
+        ctx.strokeStyle = CHART_COLORS.grid;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(w - pad.right, y);
+        ctx.stroke();
+
+        ctx.fillStyle = CHART_COLORS.axisText;
+        ctx.font = '9px "JetBrains Mono", monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(formatDollar(sv), pad.left - 8, y + 3);
+      });
+
+      // Draw zero line highlight
+      ctx.strokeStyle = CHART_COLORS.white20;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad.left, zeroY);
+      ctx.lineTo(w - pad.right, zeroY);
+      ctx.stroke();
+
+      // Draw bars
+      const numBars = keys.length;
+      const barW = Math.min(45, cw / numBars - 20);
+      const gap = (cw - barW * numBars) / (numBars + 1);
+
+      keys.forEach((key, i) => {
+        const val = vals[i];
+        const x = pad.left + gap + i * (barW + gap);
+        const yVal = toY(val);
+        const barH = zeroY - yVal;
+
+        const isPositive = val >= 0;
+        const color = isPositive ? CHART_COLORS.green : CHART_COLORS.red;
+        const fadeColor = isPositive ? CHART_COLORS.greenFade : CHART_COLORS.redFade;
+
+        const grad = ctx.createLinearGradient(0, yVal, 0, zeroY);
+        grad.addColorStop(0, color);
+        grad.addColorStop(1, fadeColor);
+
+        ctx.fillStyle = grad;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+
+        // Draw bar
+        ctx.beginPath();
+        ctx.rect(x, zeroY, barW, -barH);
+        ctx.fill();
+        ctx.stroke();
+
+        // Label on top/bottom of bar
+        ctx.fillStyle = color;
+        ctx.font = 'bold 9px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        const labelY = isPositive ? yVal - 5 : yVal + 12;
+        ctx.fillText(formatDollar(val), x + barW / 2, labelY);
+
+        // X-axis label
+        ctx.fillStyle = CHART_COLORS.axisText;
+        ctx.font = '9px "Inter", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(key, x + barW / 2, pad.top + ch + 16);
+      });
+    }
+  }
+
   /* --------------------------------------------------------
      Export to window
      -------------------------------------------------------- */
   window.EquityChart = EquityChart;
   window.DrawdownChart = DrawdownChart;
   window.PnLDistribution = PnLDistribution;
+  window.RegimePerfChart = RegimePerfChart;
 })();

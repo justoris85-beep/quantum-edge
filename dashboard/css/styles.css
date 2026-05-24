@@ -454,6 +454,8 @@ header {
 .grid-col-right .panel:nth-child(4) { animation-delay: 0.2s; }
 .grid-col-right .panel:nth-child(5) { animation-delay: 0.24s; }
 .grid-col-right .panel:nth-child(6) { animation-delay: 0.28s; }
+.grid-col-right .panel:nth-child(7) { animation-delay: 0.32s; }
+.grid-col-right .panel:nth-child(8) { animation-delay: 0.36s; }
 
 /* Panel top gradient line */
 .panel::before {

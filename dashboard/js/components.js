@@ -143,6 +143,7 @@
 
     // Side
     const tdSide = el('td', sideClass(pos.side), sideLabel(pos.side));
+    tdSide.setAttribute('title', 'Direction: LONG (buy) or SHORT (sell)');
     tr.appendChild(tdSide);
 
     // Pair
@@ -168,18 +169,21 @@
     const tdRegime = el('td');
     const rClass = regimeClass(pos.regime);
     const rPill = el('span', 'regime-mini ' + rClass, regimeLabel(pos.regime));
+    rPill.setAttribute('title', 'Market regime when this position was opened');
     tdRegime.appendChild(rPill);
     tr.appendChild(tdRegime);
 
     // Score
     const tdScore = el('td');
     const sBadge = el('span', 'score-badge ' + scoreClass(pos.score), formatNumber(pos.score, 1));
+    sBadge.setAttribute('title', 'Multi-factor strategy signal score at entry (out of 10)');
     tdScore.appendChild(sBadge);
     tr.appendChild(tdScore);
 
     // Unrealized P&L
     const pnlVal = pos.unrealized_pnl || pos.unr_pnl || pos.pnl || 0;
     const tdPnl = el('td', pnlClass(pnlVal), formatPnl(pnlVal));
+    tdPnl.setAttribute('title', 'Running unrealized profit/loss based on current price');
     tr.appendChild(tdPnl);
 
     return tr;
@@ -193,7 +197,9 @@
     tr.appendChild(el('td', '', formatDate(trade.closed_at || trade.close_time || trade.time)));
 
     // Side
-    tr.appendChild(el('td', sideClass(trade.side), sideLabel(trade.side)));
+    const tdSide = el('td', sideClass(trade.side), sideLabel(trade.side));
+    tdSide.setAttribute('title', 'Direction: LONG (buy) or SHORT (sell)');
+    tr.appendChild(tdSide);
 
     // Pair
     tr.appendChild(el('td', '', trade.pair || trade.symbol || 'BTC/USDT'));
@@ -206,15 +212,20 @@
 
     // P&L
     const pnl = trade.pnl || trade.realized_pnl || 0;
-    tr.appendChild(el('td', pnlClass(pnl), formatPnl(pnl)));
+    const tdPnl = el('td', pnlClass(pnl), formatPnl(pnl));
+    tdPnl.setAttribute('title', 'Net realized profit or loss after fees');
+    tr.appendChild(tdPnl);
 
     // P&L %
     const pnlPct = trade.pnl_pct || trade.pnl_percent || 0;
-    tr.appendChild(el('td', pnlClass(pnlPct), formatPercent(pnlPct)));
+    const tdPnlPct = el('td', pnlClass(pnlPct), formatPercent(pnlPct));
+    tdPnlPct.setAttribute('title', 'Percentage return relative to the entry price');
+    tr.appendChild(tdPnlPct);
 
     // Score
     const tdScore = el('td');
     const sB = el('span', 'score-badge ' + scoreClass(trade.score), formatNumber(trade.score, 1));
+    sB.setAttribute('title', 'Multi-factor strategy signal score when the trade was opened');
     tdScore.appendChild(sB);
     tr.appendChild(tdScore);
 

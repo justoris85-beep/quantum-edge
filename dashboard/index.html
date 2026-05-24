@@ -45,37 +45,37 @@
 
   <!-- STATS BAR -->
   <section id="stats-bar">
-    <div class="stat-card" id="stat-balance">
+    <div class="stat-card" id="stat-balance" title="Account Balance: The current total paper equity (cash balance + unrealized P&amp;L).">
       <div class="stat-label">Account Balance</div>
       <div class="stat-value mono" id="balance-value">$10,000.00</div>
       <div class="stat-sub" id="balance-sub">Initial Capital</div>
       <div class="stat-icon">💰</div>
     </div>
-    <div class="stat-card" id="stat-daily-pnl">
+    <div class="stat-card" id="stat-daily-pnl" title="Daily P&amp;L: Today's net closed profit or loss and percentage change.">
       <div class="stat-label">Daily P&amp;L</div>
       <div class="stat-value mono" id="daily-pnl-value">$0.00</div>
       <div class="stat-sub" id="daily-pnl-sub">0.00%</div>
       <div class="stat-icon">📊</div>
     </div>
-    <div class="stat-card" id="stat-winrate">
+    <div class="stat-card" id="stat-winrate" title="Win Rate: Percentage of closed trades that resulted in a profit.">
       <div class="stat-label">Win Rate</div>
       <div class="stat-value mono" id="winrate-value">0.0%</div>
       <div class="stat-sub" id="winrate-sub">0 / 0 trades</div>
       <div class="stat-icon">🎯</div>
     </div>
-    <div class="stat-card" id="stat-sharpe">
+    <div class="stat-card" id="stat-sharpe" title="Sharpe Ratio: Measures risk-adjusted performance. A higher Sharpe ratio indicates better return per unit of volatility.">
       <div class="stat-label">Sharpe Ratio</div>
       <div class="stat-value mono" id="sharpe-value">0.00</div>
       <div class="stat-sub" id="sharpe-sub">Risk-Adjusted</div>
       <div class="stat-icon">📐</div>
     </div>
-    <div class="stat-card" id="stat-profit-factor">
+    <div class="stat-card" id="stat-profit-factor" title="Profit Factor: Gross Profits divided by Gross Losses. A value above 1.0 indicates a profitable trading system.">
       <div class="stat-label">Profit Factor</div>
       <div class="stat-value mono" id="profit-factor-value">0.00</div>
       <div class="stat-sub" id="profit-factor-sub">Gross W / Gross L</div>
       <div class="stat-icon">⚖️</div>
     </div>
-    <div class="stat-card" id="stat-drawdown">
+    <div class="stat-card" id="stat-drawdown" title="Max Drawdown: The largest peak-to-trough drop in total equity. Indicates historical capital risk.">
       <div class="stat-label">Max Drawdown</div>
       <div class="stat-value mono" id="drawdown-value">0.00%</div>
       <div class="stat-sub" id="drawdown-sub">From peak</div>
@@ -102,14 +102,14 @@
           <table class="data-table" id="positions-table">
             <thead>
               <tr>
-                <th>Side</th>
-                <th>Pair</th>
-                <th>Qty</th>
-                <th>Entry</th>
-                <th>SL / TP</th>
-                <th>Regime</th>
-                <th>Score</th>
-                <th>Unr. P&amp;L</th>
+                <th title="Direction: BUY (Long) or SELL (Short)">Side</th>
+                <th title="Trading Pair (BTC/USDT)">Pair</th>
+                <th title="Position size in BTC units">Qty</th>
+                <th title="Price at which position was entered">Entry</th>
+                <th title="Stop Loss (SL) and Take Profit (TP) target prices">SL / TP</th>
+                <th title="Market regime when position was entered">Regime</th>
+                <th title="Multi-factor entry score (out of 10)">Score</th>
+                <th title="Current unrealized profit or loss in USD">Unr. P&amp;L</th>
               </tr>
             </thead>
             <tbody id="positions-body"></tbody>
@@ -135,14 +135,14 @@
           <table class="data-table" id="history-table">
             <thead>
               <tr>
-                <th>Time</th>
-                <th>Side</th>
-                <th>Pair</th>
-                <th>Entry</th>
-                <th>Exit</th>
-                <th>P&amp;L</th>
-                <th>P&amp;L %</th>
-                <th>Score</th>
+                <th title="Time when the trade was closed and settled">Time</th>
+                <th title="Direction: BUY (Long) or SELL (Short)">Side</th>
+                <th title="Trading Pair (BTC/USDT)">Pair</th>
+                <th title="Average entry fill price">Entry</th>
+                <th title="Average exit fill price">Exit</th>
+                <th title="Realized net profit or loss in USD (minus fees)">P&amp;L</th>
+                <th title="Percentage return relative to entry price">P&amp;L %</th>
+                <th title="Multi-factor entry score (out of 10)">Score</th>
               </tr>
             </thead>
             <tbody id="history-body"></tbody>
@@ -165,37 +165,37 @@
           <div class="panel-subtitle" id="factors-subtitle">Last signal breakdown</div>
         </div>
         <div class="panel-body" id="factors-body">
-          <div class="factor-row">
+          <div class="factor-row" title="EMA Trend: Confluence score of 9, 21, 50, and 200 period Exponential Moving Averages.">
             <div class="factor-label">EMA Trend</div>
             <div class="factor-bar-track"><div class="factor-bar-fill" data-factor="ema" style="width:0%"></div></div>
             <div class="factor-score mono" data-factor-val="ema">0.0</div>
           </div>
-          <div class="factor-row">
+          <div class="factor-row" title="RSI Signal: Relative Strength Index momentum indicator (momentum in trend, overbought/oversold in range).">
             <div class="factor-label">RSI Signal</div>
             <div class="factor-bar-track"><div class="factor-bar-fill" data-factor="rsi" style="width:0%"></div></div>
             <div class="factor-score mono" data-factor-val="rsi">0.0</div>
           </div>
-          <div class="factor-row">
+          <div class="factor-row" title="MACD Cross: Moving Average Convergence Divergence line, signal line cross and momentum histogram.">
             <div class="factor-label">MACD Cross</div>
             <div class="factor-bar-track"><div class="factor-bar-fill" data-factor="macd" style="width:0%"></div></div>
             <div class="factor-score mono" data-factor-val="macd">0.0</div>
           </div>
-          <div class="factor-row">
+          <div class="factor-row" title="Bollinger Band: Normalized position within upper/lower bands (breakout in trend, mean reversion in range).">
             <div class="factor-label">Bollinger Band</div>
             <div class="factor-bar-track"><div class="factor-bar-fill" data-factor="bb" style="width:0%"></div></div>
             <div class="factor-score mono" data-factor-val="bb">0.0</div>
           </div>
-          <div class="factor-row">
+          <div class="factor-row" title="Volume Profile: Volume relative to the 20-period average volume threshold.">
             <div class="factor-label">Volume Profile</div>
             <div class="factor-bar-track"><div class="factor-bar-fill" data-factor="volume" style="width:0%"></div></div>
             <div class="factor-score mono" data-factor-val="volume">0.0</div>
           </div>
-          <div class="factor-row">
+          <div class="factor-row" title="Squeeze Detect: Bollinger Bands contracting inside Keltner Channels, indicating potential explosive breakouts.">
             <div class="factor-label">Squeeze Detect</div>
             <div class="factor-bar-track"><div class="factor-bar-fill" data-factor="squeeze" style="width:0%"></div></div>
             <div class="factor-score mono" data-factor-val="squeeze">0.0</div>
           </div>
-          <div class="factor-row">
+          <div class="factor-row" title="HTF Confirm: Higher timeframe (1-hour) trend direction confirmation.">
             <div class="factor-label">HTF Confirm</div>
             <div class="factor-bar-track"><div class="factor-bar-fill" data-factor="htf" style="width:0%"></div></div>
             <div class="factor-score mono" data-factor-val="htf">0.0</div>
@@ -208,7 +208,7 @@
     <div class="grid-col-right">
 
       <!-- Equity Curve -->
-      <section class="panel" id="equity-panel">
+      <section class="panel" id="equity-panel" title="Equity Curve: Cumulative account balance over time, reflecting realized profits and losses.">
         <div class="panel-header">
           <div class="panel-title">
             <span class="panel-icon">📈</span>
@@ -222,7 +222,7 @@
       </section>
 
       <!-- Drawdown Chart -->
-      <section class="panel" id="drawdown-panel">
+      <section class="panel" id="drawdown-panel" title="Drawdown: Deepest drop from equity peak (red area) relative to the 3.0% daily limit (dashed line).">
         <div class="panel-header">
           <div class="panel-title">
             <span class="panel-icon">📉</span>
@@ -236,7 +236,7 @@
       </section>
 
       <!-- P&L Distribution -->
-      <section class="panel" id="pnl-dist-panel">
+      <section class="panel" id="pnl-dist-panel" title="P&amp;L Distribution: Frequency histogram of trade gains (green) and losses (red) with a bell curve overlay.">
         <div class="panel-header">
           <div class="panel-title">
             <span class="panel-icon">📊</span>
@@ -245,6 +245,19 @@
         </div>
         <div class="panel-body chart-body">
           <canvas id="pnl-dist-chart"></canvas>
+        </div>
+      </section>
+
+      <!-- Regime Performance Panel -->
+      <section class="panel" id="regime-perf-panel" title="Regime P&amp;L Performance: Comparative bar chart showing total net profits/losses segmented by market regime.">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon">⚖️</span>
+            Regime P&amp;L Performance
+          </div>
+        </div>
+        <div class="panel-body chart-body">
+          <canvas id="regime-perf-chart"></canvas>
         </div>
       </section>
 
@@ -280,32 +293,32 @@
         </div>
         <div class="panel-body">
           <div class="metrics-grid">
-            <div class="metric-card">
+            <div class="metric-card" title="Sharpe Ratio: Measures risk-adjusted performance using return volatility. A higher number is better.">
               <div class="metric-label">Sharpe Ratio</div>
               <div class="metric-value mono" id="qm-sharpe">0.00</div>
               <div class="metric-sub">Annualized</div>
             </div>
-            <div class="metric-card">
+            <div class="metric-card" title="Sortino Ratio: Similar to Sharpe, but only penalizes negative (downside) volatility.">
               <div class="metric-label">Sortino Ratio</div>
               <div class="metric-value mono" id="qm-sortino">0.00</div>
               <div class="metric-sub">Downside Risk</div>
             </div>
-            <div class="metric-card">
+            <div class="metric-card" title="Calmar Ratio: Annualized return divided by the maximum drawdown. Higher values indicate efficient growth.">
               <div class="metric-label">Calmar Ratio</div>
               <div class="metric-value mono" id="qm-calmar">0.00</div>
               <div class="metric-sub">Return / Max DD</div>
             </div>
-            <div class="metric-card">
+            <div class="metric-card" title="Expectancy: The average profit or loss you expect to make on each trade. Must be positive to remain profitable.">
               <div class="metric-label">Expectancy</div>
               <div class="metric-value mono" id="qm-expectancy">$0.00</div>
               <div class="metric-sub">Per Trade</div>
             </div>
-            <div class="metric-card">
+            <div class="metric-card" title="Avg Win / Loss: The ratio of the average winning trade size to the average losing trade size.">
               <div class="metric-label">Avg Win / Loss</div>
               <div class="metric-value mono" id="qm-avg-wl">0.00</div>
               <div class="metric-sub">Ratio</div>
             </div>
-            <div class="metric-card">
+            <div class="metric-card" title="Total Return: The net percentage profit earned relative to your starting capital ($10,000).">
               <div class="metric-label">Total Return</div>
               <div class="metric-value mono" id="qm-total-return">0.00%</div>
               <div class="metric-sub">Since Inception</div>
@@ -346,27 +359,27 @@
             </button>
           </div>
           <div class="risk-info-grid">
-            <div class="risk-item">
+            <div class="risk-item" title="Risk Per Trade: The percentage of total equity risked on each trade. Set to 1.0% by default.">
               <span class="risk-label">Risk / Trade</span>
               <span class="risk-value mono" id="risk-per-trade">1.0%</span>
             </div>
-            <div class="risk-item">
+            <div class="risk-item" title="Max Drawdown Limit: The maximum daily drawdown before the circuit breaker pauses trading (3.0%).">
               <span class="risk-label">Max Drawdown</span>
               <span class="risk-value mono" id="risk-max-dd">3.0%</span>
             </div>
-            <div class="risk-item">
+            <div class="risk-item" title="Kelly Fraction: Position sizing fraction calculated dynamically based on past win/loss metrics.">
               <span class="risk-label">Kelly Fraction</span>
               <span class="risk-value mono" id="risk-kelly">0.00</span>
             </div>
-            <div class="risk-item">
+            <div class="risk-item" title="Cooldown Window: Minimum wait time between trades to prevent overtrading.">
               <span class="risk-label">Cooldown</span>
               <span class="risk-value mono" id="risk-cooldown">None</span>
             </div>
-            <div class="risk-item">
+            <div class="risk-item" title="Consecutive Losses: Current count of consecutive losing trades. Circuit breaker triggers if limit is hit.">
               <span class="risk-label">Consec. Losses</span>
               <span class="risk-value mono" id="risk-consec-losses">0</span>
             </div>
-            <div class="risk-item">
+            <div class="risk-item" title="Daily Trades: The total number of trades executed during the current 24-hour cycle.">
               <span class="risk-label">Daily Trades</span>
               <span class="risk-value mono" id="risk-daily-trades">0</span>
             </div>
