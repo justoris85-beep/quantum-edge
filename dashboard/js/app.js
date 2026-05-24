@@ -232,7 +232,36 @@
      -------------------------------------------------------- */
   function updateFullStatus(rawPayload) {
     if (!rawPayload) return;
-    const data = rawPayload.data || rawPayload;
+    let data = rawPayload.data || rawPayload;
+
+    // Flatten nested backend engine.getStatus() structure if present
+    if (data.engine && data.account) {
+      const todayStats = data.today || {};
+      const initialCapital = 10000;
+      const totalEquity = data.account.totalEquity != null ? data.account.totalEquity : data.account.balance;
+      const netPnl = totalEquity - initialCapital;
+      const netPnlPct = (netPnl / initialCapital) * 100;
+
+      data = {
+        mode: data.engine.mode,
+        agent_active: data.engine.started,
+        pair: data.engine.pair,
+        balance: totalEquity,
+        daily_pnl: netPnl,
+        daily_pnl_pct: netPnlPct,
+        win_rate: data.performance ? data.performance.winRate : (todayStats.wins + todayStats.losses > 0 ? (todayStats.wins / (todayStats.wins + todayStats.losses)) * 100 : 0),
+        wins: todayStats.wins || 0,
+        total_trades: todayStats.total_trades || 0,
+        sharpe: data.performance ? data.performance.sharpeRatio : 0,
+        profit_factor: data.performance ? data.performance.profitFactor : 0,
+        max_drawdown: data.account.drawdown,
+        positions: data.positions || [],
+        paused: data.risk ? data.risk.paused : false,
+        risk: data.risk || null,
+        regime: data.regime ? data.regime.regime : null,
+        readiness: data.readiness || null
+      };
+    }
 
     // Mode
     if (data.mode) {
@@ -360,30 +389,43 @@
     if (!rawPayload) return;
     const data = rawPayload.data || rawPayload;
 
-    if (data.sharpe != null) {
-      setText('qm-sharpe', UI.formatNumber(data.sharpe));
-      setText('sharpe-value', UI.formatNumber(data.sharpe));
+    const sharpe = data.sharpe != null ? data.sharpe : data.sharpeRatio;
+    if (sharpe != null) {
+      setText('qm-sharpe', UI.formatNumber(sharpe));
+      setText('sharpe-value', UI.formatNumber(sharpe));
     }
-    if (data.sortino != null) setText('qm-sortino', UI.formatNumber(data.sortino));
-    if (data.calmar != null) setText('qm-calmar', UI.formatNumber(data.calmar));
+    const sortino = data.sortino != null ? data.sortino : data.sortinoRatio;
+    if (sortino != null) setText('qm-sortino', UI.formatNumber(sortino));
+    
+    const calmar = data.calmar != null ? data.calmar : data.calmarRatio;
+    if (calmar != null) setText('qm-calmar', UI.formatNumber(calmar));
+    
     if (data.expectancy != null) setText('qm-expectancy', UI.formatPnl(data.expectancy));
-    if (data.avg_win_loss != null || data.avg_wl != null) setText('qm-avg-wl', UI.formatNumber(data.avg_win_loss || data.avg_wl));
-    if (data.total_return != null) {
+    
+    const avgWL = data.avg_win_loss != null ? data.avg_win_loss : (data.avg_wl != null ? data.avg_wl : data.winLossRatio);
+    if (avgWL != null) setText('qm-avg-wl', UI.formatNumber(avgWL));
+    
+    const totalReturn = data.total_return != null ? data.total_return : (data.totalPnl != null ? (data.totalPnl / 10000) * 100 : null);
+    if (totalReturn != null) {
       const trEl = $('qm-total-return');
       if (trEl) {
-        trEl.textContent = UI.formatPercent(data.total_return);
-        trEl.className = 'metric-value mono ' + (data.total_return >= 0 ? 'pnl-positive' : 'pnl-negative');
+        trEl.textContent = UI.formatPercent(totalReturn);
+        trEl.className = 'metric-value mono ' + (totalReturn >= 0 ? 'pnl-positive' : 'pnl-negative');
       }
     }
-    if (data.profit_factor != null) setText('profit-factor-value', UI.formatNumber(data.profit_factor));
-    if (data.win_rate != null) setText('winrate-value', UI.formatPercent(data.win_rate).replace('+', ''));
+    const pf = data.profit_factor != null ? data.profit_factor : data.profitFactor;
+    if (pf != null) setText('profit-factor-value', UI.formatNumber(pf));
+    
+    const wr = data.win_rate != null ? data.win_rate : data.winRate;
+    if (wr != null) setText('winrate-value', UI.formatPercent(wr).replace('+', ''));
 
-    if (data.max_drawdown != null) {
+    const dd = data.max_drawdown != null ? data.max_drawdown : data.maxDrawdown;
+    if (dd != null) {
       const ddEl = $('drawdown-value');
       if (ddEl) {
-        ddEl.textContent = UI.formatPercent(-Math.abs(data.max_drawdown)).replace('+', '');
+        ddEl.textContent = UI.formatPercent(-Math.abs(dd)).replace('+', '');
       }
-      setText('dd-current', UI.formatPercent(-Math.abs(data.max_drawdown)));
+      setText('dd-current', UI.formatPercent(-Math.abs(dd)));
     }
   }
 
@@ -600,6 +642,18 @@
     const el = $('equity-current');
     if (el && val != null) {
       el.textContent = '$' + Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      
+      // Update Net P&L card in real time
+      const initialCapital = 10000;
+      const totalPnl = val - initialCapital;
+      const totalPnlPct = (totalPnl / initialCapital) * 100;
+      
+      const dpVal = $('daily-pnl-value');
+      if (dpVal) {
+        dpVal.textContent = UI.formatPnl(totalPnl);
+        dpVal.className = 'stat-value mono ' + (totalPnl >= 0 ? 'positive' : 'negative');
+      }
+      setText('daily-pnl-sub', UI.formatPercent(totalPnlPct));
     }
   }
 
