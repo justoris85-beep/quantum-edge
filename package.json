@@ -1,0 +1,19 @@
+{
+  "name": "quantum-edge",
+  "version": "2.0.0",
+  "description": "Quantum Edge — Quant-Grade BTC 5-Min Autonomous Trading Engine",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node tests/test-webhook.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.10.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.4.0",
+    "uuid": "^10.0.0",
+    "ws": "^8.18.0"
+  }
+}

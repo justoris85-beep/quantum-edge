@@ -1,0 +1,412 @@
+// ══════════════════════════════════════════════════════════════════════════════
+// QUANTUM EDGE — Institutional-Grade BTC 5-Min Strategy
+// Version 1.0 | Pine Script v6
+// ══════════════════════════════════════════════════════════════════════════════
+// Multi-factor scoring engine with regime detection, dynamic risk management,
+// trailing stops, time-based exits, and comprehensive webhook payloads.
+// ══════════════════════════════════════════════════════════════════════════════
+//@version=6
+strategy("Quantum Edge", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.04, slippage=2, pyramiding=0, calc_on_every_tick=false)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INPUTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// — Trend (EMA) —
+string grpEMA       = "Trend (EMA)"
+int    fastLen       = input.int(9,    "Fast EMA",   minval=2,  group=grpEMA)
+int    midLen        = input.int(21,   "Mid EMA",    minval=2,  group=grpEMA)
+int    slowLen       = input.int(50,   "Slow EMA",   minval=2,  group=grpEMA)
+int    macroLen      = input.int(200,  "Macro EMA",  minval=2,  group=grpEMA)
+
+// — RSI —
+string grpRSI       = "RSI"
+int    rsiLen        = input.int(14,   "RSI Length",     minval=2,  group=grpRSI)
+float  rsiOverbought = input.float(70, "Overbought",    minval=50, maxval=100, group=grpRSI)
+float  rsiOversold   = input.float(30, "Oversold",       minval=0,  maxval=50,  group=grpRSI)
+
+// — MACD —
+string grpMACD      = "MACD"
+int    macdFast      = input.int(12,   "Fast Length",    minval=1,  group=grpMACD)
+int    macdSlow      = input.int(26,   "Slow Length",    minval=1,  group=grpMACD)
+int    macdSignal    = input.int(9,    "Signal Length",  minval=1,  group=grpMACD)
+
+// — Bollinger Bands —
+string grpBB        = "Bollinger Bands"
+int    bbLen         = input.int(20,   "BB Length",      minval=2,  group=grpBB)
+float  bbMult        = input.float(2.0,"BB Multiplier",  minval=0.1, step=0.1, group=grpBB)
+
+// — Squeeze —
+string grpSQZ       = "Squeeze"
+float  kcMult        = input.float(1.5,"KC Multiplier",  minval=0.1, step=0.1, group=grpSQZ)
+
+// — Volume —
+string grpVOL       = "Volume"
+int    volLen        = input.int(20,   "Volume MA Length",  minval=1,  group=grpVOL)
+float  volThreshold  = input.float(1.5,"Volume Threshold",  minval=1.0, step=0.1, group=grpVOL)
+
+// — ATR & Risk —
+string grpRisk      = "ATR & Risk"
+int    atrLen        = input.int(14,    "ATR Length",          minval=1,   group=grpRisk)
+float  trailMultTrend= input.float(2.5, "Trail Mult (Trend)", minval=0.5, step=0.1, group=grpRisk)
+float  trailMultRange= input.float(1.5, "Trail Mult (Range)", minval=0.5, step=0.1, group=grpRisk)
+float  tpMultTrend   = input.float(3.0, "TP Mult (Trend)",    minval=0.5, step=0.1, group=grpRisk)
+float  tpMultRange   = input.float(2.0, "TP Mult (Range)",    minval=0.5, step=0.1, group=grpRisk)
+
+// — Regime —
+string grpRegime    = "Regime"
+int    adxLen        = input.int(14,    "ADX Length",          minval=2,   group=grpRegime)
+float  adxTrend      = input.float(25,  "ADX Trend Threshold", minval=10,  step=1, group=grpRegime)
+float  adxRange      = input.float(20,  "ADX Range Threshold", minval=5,   step=1, group=grpRegime)
+int    atrRatioLen   = input.int(50,    "ATR Ratio Lookback",  minval=10,  group=grpRegime)
+float  atrVolThresh  = input.float(1.5, "ATR Vol Threshold",   minval=1.0, step=0.1, group=grpRegime)
+
+// — Time Filter —
+string grpTime      = "Time Filter"
+int    maxBarsInTrade= input.int(30,    "Max Bars In Trade",   minval=1,   group=grpTime)
+
+// — Agent —
+string grpAgent     = "Agent"
+string passphrase    = input.string("", "Passphrase", group=grpAgent)
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INDICATOR CALCULATIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// 1. EMAs
+float fastEMA  = ta.ema(close, fastLen)
+float midEMA   = ta.ema(close, midLen)
+float slowEMA  = ta.ema(close, slowLen)
+float macroEMA = ta.ema(close, macroLen)
+
+// 2. RSI
+float rsiValue = ta.rsi(close, rsiLen)
+
+// 3. MACD
+[macdLine, signalLine, histogram] = ta.macd(close, macdFast, macdSlow, macdSignal)
+
+// 4. Bollinger Bands
+[bbMiddle, bbUpper, bbLower] = ta.bb(close, bbLen, bbMult)
+
+// 5. BB Z-Score — normalized position within the bands
+float bbSpread = bbUpper - bbMiddle
+float bbZScore = bbSpread != 0 ? (close - bbMiddle) / bbSpread : 0.0
+
+// 6. Keltner Channel
+float kcBasis = ta.sma(close, bbLen)
+float kcRange = kcMult * ta.sma(ta.tr, bbLen)
+float upperKC = kcBasis + kcRange
+float lowerKC = kcBasis - kcRange
+
+// 7. Squeeze Detection
+bool sqzOn    = bbLower > lowerKC and bbUpper < upperKC
+bool sqzOff   = not sqzOn
+bool sqzFired = ta.barssince(sqzOn and not sqzOn[1]) < 8
+
+// 8. Volume Spike
+bool highVol = volume > ta.sma(volume, volLen) * volThreshold
+
+// 9. ATR
+float atr = ta.atr(atrLen)
+
+// 10. ADX — manual computation via +DI / -DI / DX
+float plusDM      = (high - high[1]) > (low[1] - low) ? math.max(high - high[1], 0.0) : 0.0
+float minusDM     = (low[1] - low) > (high - high[1]) ? math.max(low[1] - low, 0.0) : 0.0
+float smoothPlusDM  = ta.rma(plusDM,  adxLen)
+float smoothMinusDM = ta.rma(minusDM, adxLen)
+float smoothTR      = ta.rma(ta.tr,   adxLen)
+float plusDI  = smoothTR != 0 ? smoothPlusDM  / smoothTR * 100.0 : 0.0
+float minusDI = smoothTR != 0 ? smoothMinusDM / smoothTR * 100.0 : 0.0
+float diSum   = plusDI + minusDI
+float dx      = diSum != 0 ? math.abs(plusDI - minusDI) / diSum * 100.0 : 0.0
+float adxValue = ta.rma(dx, adxLen)
+
+// 11. ATR Ratio — current ATR vs its own moving average
+float atrSMA   = ta.sma(atr, atrRatioLen)
+float atrRatio = atrSMA != 0 ? atr / atrSMA : 1.0
+
+// 12. Higher Time-Frame EMA (1H 50 EMA)
+float htfEMA50 = request.security(syminfo.tickerid, "60", ta.ema(close, 50))
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REGIME DETECTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+var string currentRegime = "ranging"
+
+if atrRatio >= atrVolThresh
+    currentRegime := "volatile"
+else if adxValue > adxTrend
+    currentRegime := "trending"
+else
+    currentRegime := "ranging"
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MULTI-FACTOR SIGNAL SCORING  (0–10 scale)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Factor 1: EMA Confluence (0–2) ──
+float emaScore   = 0.0
+bool  emaBullish = fastEMA > slowEMA and close > macroEMA
+bool  emaBearish = fastEMA < slowEMA and close < macroEMA
+bool  emaCrossUp   = ta.crossover(fastEMA,  midEMA)
+bool  emaCrossDown = ta.crossunder(fastEMA, midEMA)
+
+float emaScoreLong  = 0.0
+float emaScoreShort = 0.0
+
+if emaBullish
+    emaScoreLong += 1.0
+    if emaCrossUp
+        emaScoreLong += 1.0
+
+if emaBearish
+    emaScoreShort += 1.0
+    if emaCrossDown
+        emaScoreShort += 1.0
+
+// Unified emaScore for display (max of both directions)
+emaScore := math.max(emaScoreLong, emaScoreShort)
+
+// ── Factor 2: RSI (0–2) ──
+float rsiScoreLong  = 0.0
+float rsiScoreShort = 0.0
+
+if currentRegime == "trending"
+    if rsiValue > 50 and rsiValue < 70
+        rsiScoreLong := 2.0
+    if rsiValue < 50 and rsiValue > 30
+        rsiScoreShort := 2.0
+
+if currentRegime == "ranging"
+    if rsiValue < rsiOversold
+        rsiScoreLong := 2.0
+    if rsiValue > rsiOverbought
+        rsiScoreShort := 2.0
+
+float rsiScore = math.max(rsiScoreLong, rsiScoreShort)
+
+// ── Factor 3: MACD (0–2) ──
+float macdScoreLong  = 0.0
+float macdScoreShort = 0.0
+
+if macdLine > signalLine and histogram > 0
+    macdScoreLong := 1.0
+    if histogram > histogram[1]
+        macdScoreLong := 2.0
+
+if macdLine < signalLine and histogram < 0
+    macdScoreShort := 1.0
+    if histogram < histogram[1]
+        macdScoreShort := 2.0
+
+float macdScore = math.max(macdScoreLong, macdScoreShort)
+
+// ── Factor 4: BB Z-Score (0–1) ──
+float bbScoreLong  = 0.0
+float bbScoreShort = 0.0
+
+if currentRegime == "trending"
+    if bbZScore > 0.5
+        bbScoreLong := 1.0
+    if bbZScore < -0.5
+        bbScoreShort := 1.0
+
+if currentRegime == "ranging"
+    if bbZScore < -1.0
+        bbScoreLong := 1.0
+    if bbZScore > 1.0
+        bbScoreShort := 1.0
+
+float bbScore = math.max(bbScoreLong, bbScoreShort)
+
+// ── Factor 5: Volume (0–1) ──
+float volScore = highVol ? 1.0 : 0.0
+
+// ── Factor 6: Squeeze (0–1) ──
+float sqzScore = sqzFired ? 1.0 : 0.0
+
+// ── Factor 7: Higher TF Trend (0–1) ──
+float htfScoreLong  = close > htfEMA50 ? 1.0 : 0.0
+float htfScoreShort = close < htfEMA50 ? 1.0 : 0.0
+float htfScore      = math.max(htfScoreLong, htfScoreShort)
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPOSITE SCORES
+// ─────────────────────────────────────────────────────────────────────────────
+
+float longScore  = 0.0
+float shortScore = 0.0
+
+// ── Long accumulation ──
+if emaBullish
+    longScore += emaScoreLong
+if (currentRegime == "trending" and rsiValue > 50 and rsiValue < 70) or (currentRegime == "ranging" and rsiValue < rsiOversold)
+    longScore += rsiScoreLong
+if macdLine > signalLine
+    longScore += macdScoreLong
+if (currentRegime == "trending" and bbZScore > 0.5) or (currentRegime == "ranging" and bbZScore < -1.0)
+    longScore += bbScoreLong
+if highVol
+    longScore += volScore
+if sqzFired
+    longScore += sqzScore
+if close > htfEMA50
+    longScore += htfScoreLong
+
+// ── Short accumulation (mirror) ──
+if emaBearish
+    shortScore += emaScoreShort
+if (currentRegime == "trending" and rsiValue < 50 and rsiValue > 30) or (currentRegime == "ranging" and rsiValue > rsiOverbought)
+    shortScore += rsiScoreShort
+if macdLine < signalLine
+    shortScore += macdScoreShort
+if (currentRegime == "trending" and bbZScore < -0.5) or (currentRegime == "ranging" and bbZScore > 1.0)
+    shortScore += bbScoreShort
+if highVol
+    shortScore += volScore
+if sqzFired
+    shortScore += sqzScore
+if close < htfEMA50
+    shortScore += htfScoreShort
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENTRY CONDITIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+float minScoreTrend = 6.0
+float minScoreRange = 5.0
+
+bool canTrade = currentRegime != "volatile" and strategy.position_size == 0
+
+bool longEntry = canTrade and (
+     (currentRegime == "trending" and longScore  >= minScoreTrend) or
+     (currentRegime == "ranging"  and longScore  >= minScoreRange))
+
+bool shortEntry = canTrade and (
+     (currentRegime == "trending" and shortScore >= minScoreTrend) or
+     (currentRegime == "ranging"  and shortScore >= minScoreRange))
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DYNAMIC STOP LOSS, TAKE PROFIT & TRAILING
+// ─────────────────────────────────────────────────────────────────────────────
+
+float trailMult = currentRegime == "trending" ? trailMultTrend : trailMultRange
+float tpMult    = currentRegime == "trending" ? tpMultTrend    : tpMultRange
+
+var float trailStop = na
+var float entryBar  = na
+
+// Reset when flat
+if strategy.position_size == 0
+    trailStop := na
+    entryBar  := na
+
+// ── JSON Webhook Payloads ──
+string longMsg = '{"passphrase":"' + passphrase + '","action":"buy","ticker":"' + syminfo.ticker + '","price":' + str.tostring(close) + ',"regime":"' + currentRegime + '","signal_score":' + str.tostring(longScore) + ',"confidence":' + str.tostring(longScore / 10.0) + ',"factors":{"ema":' + str.tostring(emaScoreLong) + ',"rsi":' + str.tostring(rsiScoreLong) + ',"macd":' + str.tostring(macdScoreLong) + ',"bb":' + str.tostring(bbScoreLong) + ',"volume":' + str.tostring(volScore) + ',"squeeze":' + str.tostring(sqzScore) + ',"htf":' + str.tostring(htfScoreLong) + ',"adx":' + str.tostring(adxValue) + '},"atr":' + str.tostring(atr) + ',"stop_loss":' + str.tostring(close - atr * trailMult) + ',"take_profit":' + str.tostring(close + atr * tpMult) + ',"comment":"' + currentRegime + ' Long | Score: ' + str.tostring(longScore, "#.#") + '/10"}'
+
+string shortMsg = '{"passphrase":"' + passphrase + '","action":"sell","ticker":"' + syminfo.ticker + '","price":' + str.tostring(close) + ',"regime":"' + currentRegime + '","signal_score":' + str.tostring(shortScore) + ',"confidence":' + str.tostring(shortScore / 10.0) + ',"factors":{"ema":' + str.tostring(emaScoreShort) + ',"rsi":' + str.tostring(rsiScoreShort) + ',"macd":' + str.tostring(macdScoreShort) + ',"bb":' + str.tostring(bbScoreShort) + ',"volume":' + str.tostring(volScore) + ',"squeeze":' + str.tostring(sqzScore) + ',"htf":' + str.tostring(htfScoreShort) + ',"adx":' + str.tostring(adxValue) + '},"atr":' + str.tostring(atr) + ',"stop_loss":' + str.tostring(close + atr * trailMult) + ',"take_profit":' + str.tostring(close - atr * tpMult) + ',"comment":"' + currentRegime + ' Short | Score: ' + str.tostring(shortScore, "#.#") + '/10"}'
+
+string closeLongMsg  = '{"passphrase":"' + passphrase + '","action":"close_long","ticker":"' + syminfo.ticker + '","price":' + str.tostring(close) + ',"regime":"' + currentRegime + '","comment":"Close Long"}'
+string closeShortMsg = '{"passphrase":"' + passphrase + '","action":"close_short","ticker":"' + syminfo.ticker + '","price":' + str.tostring(close) + ',"regime":"' + currentRegime + '","comment":"Close Short"}'
+
+// ── Entry Execution ──
+if longEntry
+    float sl = close - (atr * trailMult)
+    strategy.entry("Long", strategy.long, alert_message=longMsg)
+    trailStop := sl
+    entryBar  := bar_index
+
+if shortEntry
+    float sl = close + (atr * trailMult)
+    strategy.entry("Short", strategy.short, alert_message=shortMsg)
+    trailStop := sl
+    entryBar  := bar_index
+
+// ── Trailing Stop Update & Exit Orders ──
+if strategy.position_size > 0
+    trailStop := math.max(nz(trailStop, close - atr * trailMult), close - (atr * trailMult))
+    strategy.exit("Exit Long", from_entry="Long", stop=trailStop, limit=close + (atr * tpMult), alert_message=closeLongMsg)
+
+if strategy.position_size < 0
+    trailStop := math.min(nz(trailStop, close + atr * trailMult), close + (atr * trailMult))
+    strategy.exit("Exit Short", from_entry="Short", stop=trailStop, limit=close - (atr * tpMult), alert_message=closeShortMsg)
+
+// ── Time-Based Exit ──
+if strategy.position_size != 0 and not na(entryBar) and (bar_index - entryBar) >= maxBarsInTrade
+    if strategy.position_size > 0 and close < strategy.position_avg_price
+        strategy.close("Long", comment="Time exit", alert_message=closeLongMsg)
+    if strategy.position_size < 0 and close > strategy.position_avg_price
+        strategy.close("Short", comment="Time exit", alert_message=closeShortMsg)
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VISUALS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── EMA Plots ──
+plot(fastEMA,  "EMA 9",   color=color.new(color.aqua,  0), linewidth=1)
+plot(midEMA,   "EMA 21",  color=color.new(color.blue,  0), linewidth=1)
+plot(slowEMA,  "EMA 50",  color=color.new(color.orange,0), linewidth=2)
+plot(macroEMA, "EMA 200", color=color.new(color.white, 0), linewidth=3)
+
+// ── Trailing Stop ──
+plot(strategy.position_size != 0 ? trailStop : na, "Trail Stop", color=color.new(color.red, 0), style=plot.style_steplinebr, linewidth=2)
+
+// ── Background Tints ──
+color bgSqueeze  = sqzOn                          ? color.new(color.black,  90) : na
+color bgTrend    = currentRegime == "trending"     ? color.new(color.green,  93) : na
+color bgRange    = currentRegime == "ranging"      ? color.new(color.blue,   93) : na
+color bgVolatile = currentRegime == "volatile"     ? color.new(color.red,    93) : na
+
+bgcolor(bgSqueeze,  title="Squeeze Active")
+bgcolor(bgTrend,    title="Trending Regime")
+bgcolor(bgRange,    title="Ranging Regime")
+bgcolor(bgVolatile, title="Volatile Regime")
+
+// ── Signal Markers ──
+plotshape(longEntry,  title="Long Signal",  location=location.belowbar, style=shape.triangleup,   size=size.small, color=color.new(color.lime, 0), text="L")
+plotshape(shortEntry, title="Short Signal", location=location.abovebar, style=shape.triangledown, size=size.small, color=color.new(color.red,  0), text="S")
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INFO TABLE
+// ─────────────────────────────────────────────────────────────────────────────
+
+var table infoTable = table.new(position.top_right, 2, 5, border_width=1)
+
+// Header colours per regime
+color regimeColor = currentRegime == "trending" ? color.green : currentRegime == "volatile" ? color.red : color.blue
+
+// Determine the dominant score for display
+float displayScore = strategy.position_size > 0 ? longScore : strategy.position_size < 0 ? shortScore : math.max(longScore, shortScore)
+string scoreDir    = strategy.position_size > 0 ? "Long" : strategy.position_size < 0 ? "Short" : longScore >= shortScore ? "Long" : "Short"
+
+if barstate.islast
+    // Row 0 — Title
+    table.cell(infoTable, 0, 0, "Quantum Edge",    text_color=color.white, bgcolor=color.new(color.gray, 30), text_size=size.small)
+    table.cell(infoTable, 1, 0, "",                 bgcolor=color.new(color.gray, 30))
+
+    // Row 1 — Regime
+    table.cell(infoTable, 0, 1, "Regime",           text_color=color.white, bgcolor=color.new(color.gray, 60), text_size=size.small)
+    table.cell(infoTable, 1, 1, str.upper(currentRegime), text_color=color.white, bgcolor=regimeColor, text_size=size.small)
+
+    // Row 2 — Signal Score
+    table.cell(infoTable, 0, 2, "Score (" + scoreDir + ")", text_color=color.white, bgcolor=color.new(color.gray, 60), text_size=size.small)
+    table.cell(infoTable, 1, 2, str.tostring(displayScore, "#.#") + " / 10", text_color=color.white, bgcolor=displayScore >= 6 ? color.green : displayScore >= 4 ? color.orange : color.red, text_size=size.small)
+
+    // Row 3 — ADX
+    table.cell(infoTable, 0, 3, "ADX",              text_color=color.white, bgcolor=color.new(color.gray, 60), text_size=size.small)
+    table.cell(infoTable, 1, 3, str.tostring(adxValue, "#.#"), text_color=color.white, bgcolor=adxValue > adxTrend ? color.green : color.new(color.gray, 40), text_size=size.small)
+
+    // Row 4 — ATR Ratio
+    table.cell(infoTable, 0, 4, "ATR Ratio",        text_color=color.white, bgcolor=color.new(color.gray, 60), text_size=size.small)
+    table.cell(infoTable, 1, 4, str.tostring(atrRatio, "#.##"), text_color=color.white, bgcolor=atrRatio >= atrVolThresh ? color.red : color.new(color.gray, 40), text_size=size.small)
+// ══════════════════════════════════════════════════════════════════════════════
+// END OF STRATEGY
+// ══════════════════════════════════════════════════════════════════════════════

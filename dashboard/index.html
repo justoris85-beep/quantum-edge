@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quantum Edge — Autonomous Trading Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header id="main-header">
+    <div class="header-left">
+      <div class="logo">⚡ Quantum<span class="accent">Edge</span></div>
+      <div id="agent-status" class="status-badge status-connecting">
+        <span class="status-dot"></span>
+        <span class="status-text">Connecting...</span>
+      </div>
+    </div>
+    <div class="header-center">
+      <div id="regime-indicator" class="regime-pill regime-unknown">
+        <span class="regime-icon">◆</span>
+        <span id="regime-text">DETECTING...</span>
+      </div>
+      <div class="mode-indicator" id="mode-indicator">
+        <span class="mode-icon">📄</span>
+        <span class="mode-text">PAPER TRADE</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="header-stat">
+        <span class="label">Pair</span>
+        <span class="value" id="trading-pair">BTC/USDT</span>
+      </div>
+      <div class="header-stat">
+        <span class="label">Uptime</span>
+        <span class="value mono" id="uptime">00:00:00</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- STATS BAR -->
+  <section id="stats-bar">
+    <div class="stat-card" id="stat-balance">
+      <div class="stat-label">Account Balance</div>
+      <div class="stat-value mono" id="balance-value">$10,000.00</div>
+      <div class="stat-sub" id="balance-sub">Initial Capital</div>
+      <div class="stat-icon">💰</div>
+    </div>
+    <div class="stat-card" id="stat-daily-pnl">
+      <div class="stat-label">Daily P&amp;L</div>
+      <div class="stat-value mono" id="daily-pnl-value">$0.00</div>
+      <div class="stat-sub" id="daily-pnl-sub">0.00%</div>
+      <div class="stat-icon">📊</div>
+    </div>
+    <div class="stat-card" id="stat-winrate">
+      <div class="stat-label">Win Rate</div>
+      <div class="stat-value mono" id="winrate-value">0.0%</div>
+      <div class="stat-sub" id="winrate-sub">0 / 0 trades</div>
+      <div class="stat-icon">🎯</div>
+    </div>
+    <div class="stat-card" id="stat-sharpe">
+      <div class="stat-label">Sharpe Ratio</div>
+      <div class="stat-value mono" id="sharpe-value">0.00</div>
+      <div class="stat-sub" id="sharpe-sub">Risk-Adjusted</div>
+      <div class="stat-icon">📐</div>
+    </div>
+    <div class="stat-card" id="stat-profit-factor">
+      <div class="stat-label">Profit Factor</div>
+      <div class="stat-value mono" id="profit-factor-value">0.00</div>
+      <div class="stat-sub" id="profit-factor-sub">Gross W / Gross L</div>
+      <div class="stat-icon">⚖️</div>
+    </div>
+    <div class="stat-card" id="stat-drawdown">
+      <div class="stat-label">Max Drawdown</div>
+      <div class="stat-value mono" id="drawdown-value">0.00%</div>
+      <div class="stat-sub" id="drawdown-sub">From peak</div>
+      <div class="stat-icon">📉</div>
+    </div>
+  </section>
+
+  <!-- MAIN GRID -->
+  <main id="main-grid">
+    <!-- LEFT COLUMN -->
+    <div class="grid-col-left">
+
+      <!-- Open Positions Panel -->
+      <section class="panel" id="positions-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon">📌</span>
+            Open Positions
+            <span class="badge" id="positions-count">0</span>
+          </div>
+          <button class="btn btn-danger btn-sm" id="btn-close-all" title="Close all positions">Close All</button>
+        </div>
+        <div class="panel-body scrollable">
+          <table class="data-table" id="positions-table">
+            <thead>
+              <tr>
+                <th>Side</th>
+                <th>Pair</th>
+                <th>Qty</th>
+                <th>Entry</th>
+                <th>SL / TP</th>
+                <th>Regime</th>
+                <th>Score</th>
+                <th>Unr. P&amp;L</th>
+              </tr>
+            </thead>
+            <tbody id="positions-body"></tbody>
+          </table>
+          <div class="empty-state" id="positions-empty">
+            <div class="empty-icon">📭</div>
+            <div class="empty-text">No open positions</div>
+            <div class="empty-sub">Waiting for signals...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Trade History Panel -->
+      <section class="panel" id="history-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon">📜</span>
+            Trade History
+            <span class="badge" id="history-count">0</span>
+          </div>
+        </div>
+        <div class="panel-body scrollable scrollable-lg">
+          <table class="data-table" id="history-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Side</th>
+                <th>Pair</th>
+                <th>Entry</th>
+                <th>Exit</th>
+                <th>P&amp;L</th>
+                <th>P&amp;L %</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody id="history-body"></tbody>
+          </table>
+          <div class="empty-state" id="history-empty">
+            <div class="empty-icon">📋</div>
+            <div class="empty-text">No trade history</div>
+            <div class="empty-sub">Completed trades appear here</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Factor Attribution Panel -->
+      <section class="panel" id="factors-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon">🧬</span>
+            Signal Factors
+          </div>
+          <div class="panel-subtitle" id="factors-subtitle">Last signal breakdown</div>
+        </div>
+        <div class="panel-body" id="factors-body">
+          <div class="factor-row">
+            <div class="factor-label">EMA Trend</div>
+            <div class="factor-bar-track"><div class="factor-bar-fill" data-factor="ema" style="width:0%"></div></div>
+            <div class="factor-score mono" data-factor-val="ema">0.0</div>
+          </div>
+          <div class="factor-row">
+            <div class="factor-label">RSI Signal</div>
+            <div class="factor-bar-track"><div class="factor-bar-fill" data-factor="rsi" style="width:0%"></div></div>
+            <div class="factor-score mono" data-factor-val="rsi">0.0</div>
+          </div>
+          <div class="factor-row">
+            <div class="factor-label">MACD Cross</div>
+            <div class="factor-bar-track"><div class="factor-bar-fill" data-factor="macd" style="width:0%"></div></div>
+            <div class="factor-score mono" data-factor-val="macd">0.0</div>
+          </div>
+          <div class="factor-row">
+            <div class="factor-label">Bollinger Band</div>
+            <div class="factor-bar-track"><div class="factor-bar-fill" data-factor="bb" style="width:0%"></div></div>
+            <div class="factor-score mono" data-factor-val="bb">0.0</div>
+          </div>
+          <div class="factor-row">
+            <div class="factor-label">Volume Profile</div>
+            <div class="factor-bar-track"><div class="factor-bar-fill" data-factor="volume" style="width:0%"></div></div>
+            <div class="factor-score mono" data-factor-val="volume">0.0</div>
+          </div>
+          <div class="factor-row">
+            <div class="factor-label">Squeeze Detect</div>
+            <div class="factor-bar-track"><div class="factor-bar-fill" data-factor="squeeze" style="width:0%"></div></div>
+            <div class="factor-score mono" data-factor-val="squeeze">0.0</div>
+          </div>
+          <div class="factor-row">
+            <div class="factor-label">HTF Confirm</div>
+            <div class="factor-bar-track"><div class="factor-bar-fill" data-factor="htf" style="width:0%"></div></div>
+            <div class="factor-score mono" data-factor-val="htf">0.0</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div class="grid-col-right">
+
+      <!-- Equity Curve -->
+      <section class="panel" id="equity-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon">📈</span>
+            Equity Curve
+          </div>
+          <div class="panel-value mono" id="equity-current">$10,000.00</div>
+        </div>
+        <div class="panel-body chart-body">
+          <canvas id="equity-chart"></canvas>
+        </div>
+      </section>
+
+      <!-- Drawdown Chart -->
+      <section class="panel" id="drawdown-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon">📉</span>
+            Drawdown
+          </div>
+          <div class="panel-value mono dd-value" id="dd-current">0.00%</div>
+        </div>
+        <div class="panel-body chart-body">
+          <canvas id="drawdown-chart"></canvas>
+        </div>
+      </section>
+
+      <!-- P&L Distribution -->
+      <section class="panel" id="pnl-dist-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon">📊</span>
+            P&amp;L Distribution
+          </div>
+        </div>
+        <div class="panel-body chart-body">
+          <canvas id="pnl-dist-chart"></canvas>
+        </div>
+      </section>
+
+      <!-- Go-Live Readiness Checklist Panel -->
+      <section class="panel" id="readiness-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon">🚀</span>
+            Go-Live Readiness Tracker
+          </div>
+          <div class="readiness-badge" id="readiness-summary-badge">0/8 PASSED</div>
+        </div>
+        <div class="panel-body">
+          <div class="readiness-checklist" id="readiness-checklist-container">
+            <!-- Dynamic checklist items -->
+          </div>
+          <div class="readiness-progress-wrapper">
+            <div class="readiness-progress-bar">
+              <div class="readiness-progress-fill" id="readiness-progress-fill" style="width: 0%"></div>
+            </div>
+            <div class="readiness-progress-text" id="readiness-progress-text">0% Complete</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Quant Metrics Panel -->
+      <section class="panel" id="quant-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon">🧮</span>
+            Quant Metrics
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <div class="metric-label">Sharpe Ratio</div>
+              <div class="metric-value mono" id="qm-sharpe">0.00</div>
+              <div class="metric-sub">Annualized</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Sortino Ratio</div>
+              <div class="metric-value mono" id="qm-sortino">0.00</div>
+              <div class="metric-sub">Downside Risk</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Calmar Ratio</div>
+              <div class="metric-value mono" id="qm-calmar">0.00</div>
+              <div class="metric-sub">Return / Max DD</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Expectancy</div>
+              <div class="metric-value mono" id="qm-expectancy">$0.00</div>
+              <div class="metric-sub">Per Trade</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Avg Win / Loss</div>
+              <div class="metric-value mono" id="qm-avg-wl">0.00</div>
+              <div class="metric-sub">Ratio</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Total Return</div>
+              <div class="metric-value mono" id="qm-total-return">0.00%</div>
+              <div class="metric-sub">Since Inception</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Live Activity Feed -->
+      <section class="panel" id="activity-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon">⚡</span>
+            Live Activity
+            <span class="live-dot"></span>
+          </div>
+        </div>
+        <div class="panel-body scrollable scrollable-md" id="activity-feed"></div>
+      </section>
+
+      <!-- Agent Controls -->
+      <section class="panel" id="controls-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon">🎛️</span>
+            Agent Controls
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="controls-actions">
+            <button class="btn btn-kill" id="btn-kill-switch">
+              <span class="btn-icon">⛔</span>
+              <span class="btn-label">KILL SWITCH</span>
+            </button>
+            <button class="btn btn-resume hidden" id="btn-resume">
+              <span class="btn-icon">▶️</span>
+              <span class="btn-label">RESUME</span>
+            </button>
+          </div>
+          <div class="risk-info-grid">
+            <div class="risk-item">
+              <span class="risk-label">Risk / Trade</span>
+              <span class="risk-value mono" id="risk-per-trade">1.0%</span>
+            </div>
+            <div class="risk-item">
+              <span class="risk-label">Max Drawdown</span>
+              <span class="risk-value mono" id="risk-max-dd">3.0%</span>
+            </div>
+            <div class="risk-item">
+              <span class="risk-label">Kelly Fraction</span>
+              <span class="risk-value mono" id="risk-kelly">0.00</span>
+            </div>
+            <div class="risk-item">
+              <span class="risk-label">Cooldown</span>
+              <span class="risk-value mono" id="risk-cooldown">None</span>
+            </div>
+            <div class="risk-item">
+              <span class="risk-label">Consec. Losses</span>
+              <span class="risk-value mono" id="risk-consec-losses">0</span>
+            </div>
+            <div class="risk-item">
+              <span class="risk-label">Daily Trades</span>
+              <span class="risk-value mono" id="risk-daily-trades">0</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- FOOTER -->
+  <footer id="main-footer">
+    <span class="footer-brand">Quantum Edge v2.0 — Quant-Grade Autonomous Trading</span>
+    <span class="footer-status" id="ws-status">
+      <span class="ws-dot disconnected"></span>
+      Disconnected
+    </span>
+  </footer>
+
+  <script src="js/charts.js"></script>
+  <script src="js/components.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
