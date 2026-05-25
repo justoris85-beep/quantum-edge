@@ -182,7 +182,7 @@ class RiskManager {
     if (pnl < 0) {
       this.consecutiveLosses++;
       log.risk(`Consecutive losses: ${this.consecutiveLosses}/${this.maxConsecutiveLosses}`);
-    } else if (pnl > 0) {
+    } else {
       if (this.consecutiveLosses > 0) {
         log.risk(`Consecutive loss streak broken after ${this.consecutiveLosses} losses`);
       }

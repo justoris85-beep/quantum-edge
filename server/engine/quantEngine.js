@@ -30,14 +30,17 @@ class QuantEngine {
   /**
    * Initialize all sub-modules and restore state from database.
    */
-  initialize() {
+  async initialize() {
     log.system('Initializing Quantum Edge Engine...');
 
+    // Initialize Schema
+    await db.initializeSchema();
+
     // Load open positions from DB
-    this.portfolioManager.loadFromDb();
+    await this.portfolioManager.loadFromDb();
 
     // Restore balance from latest equity snapshot
-    const equityHistory = db.getEquityHistory(1);
+    const equityHistory = await db.getEquityHistory(1);
     if (equityHistory.length > 0) {
       const latest = equityHistory[equityHistory.length - 1];
       this.paperBalance = latest.balance;
@@ -45,7 +48,7 @@ class QuantEngine {
     }
 
     // Restore regime from latest history
-    const regimeHistory = db.getRegimeHistory(1);
+    const regimeHistory = await db.getRegimeHistory(1);
     if (regimeHistory.length > 0) {
       const latest = regimeHistory[0];
       this.regimeDetector.update(latest.regime, latest.adx_value, latest.atr_value);
@@ -53,7 +56,7 @@ class QuantEngine {
     }
 
     // Load trade history for risk manager Kelly calculation
-    const closedTrades = db.getAllClosedTrades();
+    const closedTrades = await db.getAllClosedTrades();
     for (const trade of closedTrades.slice(-200)) {
       this.riskManager.tradeHistory.push({
         pnl: trade.pnl,
@@ -81,14 +84,25 @@ class QuantEngine {
    * @param {object} payload - Parsed webhook payload
    * @returns {object} Processing result
    */
-  processSignal(payload) {
+  async processSignal(payload) {
     this.totalSignalsReceived++;
     const signalId = uuidv4();
 
     log.signal(`Signal received: ${payload.action} | price=$${payload.price} | score=${payload.signal_score || '?'} | regime=${payload.regime || '?'}`);
 
+    // Broadcast signal to dashboard
+    this.broadcast({
+      type: 'signal',
+      data: {
+        direction: payload.action,
+        side: payload.action,
+        score: payload.signal_score,
+        factors: payload.factors,
+      },
+    });
+
     // 1. Log signal to DB
-    db.insertSignal({
+    await db.insertSignal({
       signal_id: signalId,
       raw_payload: payload,
       action: payload.action,
@@ -109,7 +123,7 @@ class QuantEngine {
     // 2. Validate minimum signal fields
     if (!payload.action || !payload.price) {
       const reason = 'Missing required fields: action or price';
-      db.markSignalRejected(signalId, reason);
+      await db.markSignalRejected(signalId, reason);
       log.warn(`Signal rejected: ${reason}`);
       return { success: false, signalId, reason };
     }
@@ -122,10 +136,16 @@ class QuantEngine {
         payload.atr
       );
       if (regimeUpdate.changed) {
-        db.insertRegimeChange({
+        await db.insertRegimeChange({
           regime: payload.regime,
           adx_value: payload.adx,
           atr_value: payload.atr,
+        });
+
+        // Broadcast regime change
+        this.broadcast({
+          type: 'regime',
+          data: payload.regime,
         });
       }
     }
@@ -136,7 +156,7 @@ class QuantEngine {
     // 5. Check SL/TP exits for existing positions
     const exits = this.portfolioManager.checkExits(payload.price);
     for (const exit of exits) {
-      this.closePosition(exit.trade_id, exit.exit_price, exit.reason);
+      await this.closePosition(exit.trade_id, exit.exit_price, exit.reason);
     }
 
     // 6. Route by action
@@ -144,14 +164,14 @@ class QuantEngine {
     let result;
 
     if (action === 'buy' || action === 'long') {
-      result = this.handleEntry('buy', payload, signalId);
+      result = await this.handleEntry('buy', payload, signalId);
     } else if (action === 'sell' || action === 'short') {
-      result = this.handleEntry('sell', payload, signalId);
+      result = await this.handleEntry('sell', payload, signalId);
     } else if (action === 'close_long' || action === 'close_short' || action === 'close_all') {
-      result = this.handleClose(action, payload, signalId);
+      result = await this.handleClose(action, payload, signalId);
     } else {
       const reason = `Unknown action: ${action}`;
-      db.markSignalRejected(signalId, reason);
+      await db.markSignalRejected(signalId, reason);
       log.warn(`Signal rejected: ${reason}`);
       result = { success: false, signalId, reason };
     }
@@ -179,7 +199,7 @@ class QuantEngine {
    * @param {string} signalId - Signal UUID
    * @returns {object}
    */
-  handleEntry(side, payload, signalId) {
+  async handleEntry(side, payload, signalId) {
     // Run risk manager evaluation
     const evaluation = this.riskManager.evaluate(
       payload,
@@ -189,7 +209,7 @@ class QuantEngine {
     );
 
     if (!evaluation.approved) {
-      db.markSignalRejected(signalId, evaluation.reason);
+      await db.markSignalRejected(signalId, evaluation.reason);
       return { success: false, signalId, reason: evaluation.reason };
     }
 
@@ -211,17 +231,43 @@ class QuantEngine {
       factors: payload.factors,
       is_paper: config.paperTrade,
       notes: `Kelly=${evaluation.kellyFraction.toFixed(4)}, Risk=$${evaluation.riskAmount.toFixed(2)}`,
+      opened_at: new Date().toISOString(),
     };
 
     // Save to DB
-    db.insertTrade(trade);
-    db.markSignalProcessed(signalId);
+    await db.insertTrade(trade);
+    await db.markSignalProcessed(signalId);
 
     // Add to portfolio
     this.portfolioManager.addPosition(trade);
     this.totalTradesExecuted++;
 
     log.trade(side, `ENTRY: ${side.toUpperCase()} ${evaluation.quantity.toFixed(6)} ${config.tradingPair} @ $${payload.price.toFixed(2)} | SL=$${payload.stop_loss || 'none'} TP=$${payload.take_profit || 'none'} | [${tradeId.slice(0, 8)}]`);
+
+    // Broadcast trade open to dashboard
+    this.broadcast({
+      type: 'trade_open',
+      data: {
+        trade_id: tradeId,
+        tradeId: tradeId,
+        signal_id: signalId,
+        ticker: trade.ticker,
+        pair: trade.ticker,
+        side: trade.side,
+        qty: trade.quantity,
+        quantity: trade.quantity,
+        entry: trade.entry_price,
+        entry_price: trade.entry_price,
+        sl: trade.stop_loss,
+        stop_loss: trade.stop_loss,
+        tp: trade.take_profit,
+        take_profit: trade.take_profit,
+        regime: trade.regime_at_entry,
+        score: trade.signal_score,
+        unrealized_pnl: 0,
+        opened_at: trade.opened_at,
+      },
+    });
 
     return {
       success: true,
@@ -241,7 +287,7 @@ class QuantEngine {
    * @param {string} reason - 'stop_loss', 'take_profit', 'manual', 'signal'
    * @returns {object}
    */
-  closePosition(tradeId, exitPrice, reason) {
+  async closePosition(tradeId, exitPrice, reason) {
     const position = this.portfolioManager.getPosition(tradeId);
     if (!position) {
       log.warn(`Cannot close position: ${tradeId} not found`);
@@ -271,7 +317,7 @@ class QuantEngine {
     this.portfolioManager.getCurrentDrawdown(this.paperBalance);
 
     // Close in DB
-    db.closeTrade({
+    await db.closeTrade({
       trade_id: tradeId,
       exit_price: exitPrice,
       pnl: parseFloat(netPnl.toFixed(2)),
@@ -293,22 +339,39 @@ class QuantEngine {
 
     // Broadcast trade close
     this.broadcast({
-      type: 'trade_closed',
+      type: 'trade_close',
       data: {
+        trade_id: tradeId,
         tradeId,
+        signal_id: position.signal_id,
+        ticker: position.ticker,
+        pair: position.ticker,
         side: position.side,
+        qty: position.quantity,
+        quantity: position.quantity,
+        entry: position.entry_price,
+        entry_price: position.entry_price,
+        exit: exitPrice,
+        exit_price: exitPrice,
         exitPrice,
         pnl: parseFloat(netPnl.toFixed(2)),
+        realized_pnl: parseFloat(netPnl.toFixed(2)),
+        pnl_percent: parseFloat(pnlPercent.toFixed(4)),
         pnlPercent: parseFloat(pnlPercent.toFixed(4)),
-        reason,
+        pnl_pct: parseFloat(pnlPercent.toFixed(4)),
+        fees: parseFloat(fees.toFixed(2)),
+        score: position.signal_score || 0,
+        regime: position.regime_at_entry || '',
+        opened_at: position.opened_at,
+        closed_at: new Date().toISOString(),
+        time: new Date().toISOString(),
         balance: parseFloat(this.paperBalance.toFixed(2)),
       },
     });
 
     // Broadcast updated readiness checklist
     try {
-      const readiness = this.getPerformance(); // Wait, getPerformance is the metrics, getReadinessChecklist is in performanceTracker
-      const readinessData = this.performanceTracker.getReadinessChecklist(this.startTime);
+      const readinessData = await this.performanceTracker.getReadinessChecklist(this.startTime);
       this.broadcast({
         type: 'readiness',
         data: readinessData,
@@ -333,7 +396,7 @@ class QuantEngine {
    * @param {string} signalId
    * @returns {object}
    */
-  handleClose(action, payload, signalId) {
+  async handleClose(action, payload, signalId) {
     const exitPrice = payload.price;
     let closedCount = 0;
     let totalPnl = 0;
@@ -341,7 +404,7 @@ class QuantEngine {
     if (action === 'close_all') {
       const positions = this.portfolioManager.getAllPositions();
       for (const pos of positions) {
-        const result = this.closePosition(pos.trade_id, exitPrice, 'signal_close_all');
+        const result = await this.closePosition(pos.trade_id, exitPrice, 'signal_close_all');
         if (result.success) {
           closedCount++;
           totalPnl += result.pnl;
@@ -350,7 +413,7 @@ class QuantEngine {
     } else if (action === 'close_long') {
       const longPositions = this.portfolioManager.getPositionsBySide('buy');
       for (const pos of longPositions) {
-        const result = this.closePosition(pos.trade_id, exitPrice, 'signal_close_long');
+        const result = await this.closePosition(pos.trade_id, exitPrice, 'signal_close_long');
         if (result.success) {
           closedCount++;
           totalPnl += result.pnl;
@@ -359,7 +422,7 @@ class QuantEngine {
     } else if (action === 'close_short') {
       const shortPositions = this.portfolioManager.getPositionsBySide('sell');
       for (const pos of shortPositions) {
-        const result = this.closePosition(pos.trade_id, exitPrice, 'signal_close_short');
+        const result = await this.closePosition(pos.trade_id, exitPrice, 'signal_close_short');
         if (result.success) {
           closedCount++;
           totalPnl += result.pnl;
@@ -367,7 +430,7 @@ class QuantEngine {
       }
     }
 
-    db.markSignalProcessed(signalId);
+    await db.markSignalProcessed(signalId);
 
     log.signal(`Close signal processed: ${action} | Closed ${closedCount} position(s) | Total PnL: $${totalPnl.toFixed(2)}`);
 
@@ -384,10 +447,11 @@ class QuantEngine {
    * Get full engine status.
    * @returns {object}
    */
-  getStatus() {
-    const todayStats = db.getTodayStats();
+  async getStatus() {
+    const todayStats = await db.getTodayStats();
     const totalEquity = this.paperBalance + this.portfolioManager.getTotalUnrealizedPnl();
     const drawdown = this.portfolioManager.getCurrentDrawdown(totalEquity);
+    const readiness = await this.performanceTracker.getReadinessChecklist(this.startTime);
 
     return {
       engine: {
@@ -412,7 +476,8 @@ class QuantEngine {
         totalTrades: this.totalTradesExecuted,
         wsClients: this.wsClients.size,
       },
-      readiness: this.performanceTracker.getReadinessChecklist(this.startTime),
+      readiness,
+      performance: await this.getPerformance(),
     };
   }
 
@@ -420,19 +485,19 @@ class QuantEngine {
    * Get full quantitative performance metrics.
    * @returns {object}
    */
-  getPerformance() {
-    return this.performanceTracker.getMetrics();
+  async getPerformance() {
+    return await this.performanceTracker.getMetrics();
   }
 
   /**
    * Take an equity snapshot (called on interval).
    */
-  takeEquitySnapshot() {
+  async takeEquitySnapshot() {
     const unrealizedPnl = this.portfolioManager.getTotalUnrealizedPnl();
     const totalEquity = this.paperBalance + unrealizedPnl;
     const drawdown = this.portfolioManager.getCurrentDrawdown(totalEquity);
 
-    db.insertEquitySnapshot({
+    await db.insertEquitySnapshot({
       balance: parseFloat(this.paperBalance.toFixed(2)),
       unrealized_pnl: parseFloat(unrealizedPnl.toFixed(2)),
       total_equity: parseFloat(totalEquity.toFixed(2)),
@@ -441,16 +506,28 @@ class QuantEngine {
     });
 
     log.debug(`Equity snapshot: balance=$${this.paperBalance.toFixed(2)}, equity=$${totalEquity.toFixed(2)}, DD=${(drawdown * 100).toFixed(2)}%`);
+
+    // Broadcast equity snapshot to dashboard
+    this.broadcast({
+      type: 'equity',
+      data: {
+        total: parseFloat(totalEquity.toFixed(2)),
+        value: parseFloat(totalEquity.toFixed(2)),
+        balance: parseFloat(this.paperBalance.toFixed(2)),
+        unrealizedPnl: parseFloat(unrealizedPnl.toFixed(2)),
+        drawdown: parseFloat((drawdown * 100).toFixed(4)),
+      },
+    });
   }
 
   /**
    * Take a performance snapshot (called on interval).
    */
-  takePerformanceSnapshot() {
-    const metrics = this.performanceTracker.computeAll();
+  async takePerformanceSnapshot() {
+    const metrics = await this.performanceTracker.computeAll();
     const today = new Date().toISOString().slice(0, 10);
 
-    db.insertPerformanceSnapshot({
+    await db.insertPerformanceSnapshot({
       date: today,
       total_trades: metrics.totalTrades,
       wins: metrics.wins,
@@ -467,6 +544,12 @@ class QuantEngine {
     });
 
     log.debug(`Performance snapshot saved: ${metrics.totalTrades} trades, PF=${metrics.profitFactor.toFixed(2)}, Sharpe=${metrics.sharpeRatio.toFixed(2)}`);
+
+    // Broadcast performance metrics to dashboard
+    this.broadcast({
+      type: 'performance',
+      data: metrics,
+    });
   }
 
   /**
@@ -507,12 +590,12 @@ class QuantEngine {
   /**
    * Close all positions and shut down the engine.
    */
-  shutdown() {
+  async shutdown() {
     log.system('Shutting down Quantum Edge Engine...');
 
     // Take final snapshots
-    this.takeEquitySnapshot();
-    this.takePerformanceSnapshot();
+    await this.takeEquitySnapshot();
+    await this.takePerformanceSnapshot();
 
     // Close all WS clients
     for (const ws of this.wsClients) {
@@ -523,7 +606,7 @@ class QuantEngine {
     this.wsClients.clear();
 
     // Close database
-    db.close();
+    await db.close();
 
     this.started = false;
     log.system('Quantum Edge Engine shut down complete');

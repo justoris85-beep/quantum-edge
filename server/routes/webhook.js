@@ -42,11 +42,25 @@ const webhookLimiter = rateLimit({
  *   "comment": "Strong trend continuation"
  * }
  */
-router.post('/webhook', webhookLimiter, (req, res) => {
+router.post('/webhook', webhookLimiter, async (req, res) => {
   const startTime = Date.now();
 
   try {
-    const payload = req.body;
+    let payload = req.body;
+
+    // Handle text/plain or stringified payloads from TradingView
+    if (typeof payload === 'string') {
+      try {
+        payload = JSON.parse(payload.trim());
+      } catch (err) {
+        log.warn(`Webhook received invalid JSON string from ${req.ip}: "${req.body.substring(0, 100)}"`);
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid JSON payload format',
+          rawReceived: req.body.substring(0, 100)
+        });
+      }
+    }
 
     // 1. Validate passphrase
     if (!payload || !payload.passphrase) {
@@ -113,7 +127,7 @@ router.post('/webhook', webhookLimiter, (req, res) => {
     }
 
     // 6. Process signal through engine
-    const result = req.app.locals.engine.processSignal(normalizedPayload);
+    const result = await req.app.locals.engine.processSignal(normalizedPayload);
 
     const elapsed = Date.now() - startTime;
     log.info(`Webhook processed in ${elapsed}ms`);

@@ -645,6 +645,197 @@
     }
   }
 
+  /* ============================================================
+     WIN/LOSS DONUT CHART — Circular breakdown of wins, losses, breakevens
+     ============================================================ */
+  class WinLossDonutChart {
+    constructor(canvasId) {
+      this.canvas = document.getElementById(canvasId);
+      this.data = { wins: 0, losses: 0, breakeven: 0 };
+      this._bind();
+    }
+
+    _bind() {
+      const ro = new ResizeObserver(() => this.render());
+      ro.observe(this.canvas.parentElement);
+    }
+
+    setData(wins, losses, breakeven) {
+      this.data = { wins, losses, breakeven };
+      this.render();
+    }
+
+    render() {
+      if (!this.canvas.parentElement) return;
+      const { ctx, w, h } = setupCanvas(this.canvas);
+
+      const total = this.data.wins + this.data.losses + this.data.breakeven;
+      if (total === 0) {
+        ctx.fillStyle = CHART_COLORS.gridText;
+        ctx.font = '11px "Inter", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Awaiting trade results...', w / 2, h / 2);
+        return;
+      }
+
+      const cx = w / 2;
+      const cy = h / 2;
+      const radius = Math.min(cx, cy) * 0.75;
+      const thickness = radius * 0.35;
+
+      const winPct = this.data.wins / total;
+      const lossPct = this.data.losses / total;
+      const bePct = this.data.breakeven / total;
+
+      const angles = [
+        { pct: winPct, color: CHART_COLORS.green, label: 'Wins' },
+        { pct: lossPct, color: CHART_COLORS.red, label: 'Losses' },
+        { pct: bePct, color: CHART_COLORS.blue, label: 'BE' }
+      ];
+
+      let startAngle = -Math.PI / 2;
+
+      angles.forEach(slice => {
+        if (slice.pct === 0) return;
+        const angle = slice.pct * Math.PI * 2;
+        const endAngle = startAngle + angle;
+
+        // Draw arc
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, startAngle, endAngle);
+        ctx.strokeStyle = slice.color;
+        ctx.lineWidth = thickness;
+        ctx.lineCap = 'butt';
+        ctx.stroke();
+
+        startAngle = endAngle;
+      });
+
+      // Draw center text
+      ctx.fillStyle = CHART_COLORS.green;
+      ctx.font = 'bold 16px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const winRateStr = ((this.data.wins / total) * 100).toFixed(1) + '%';
+      ctx.fillText(winRateStr, cx, cy - 6);
+
+      ctx.fillStyle = CHART_COLORS.axisText;
+      ctx.font = '9px "Inter", sans-serif';
+      ctx.fillText('WIN RATE', cx, cy + 10);
+    }
+  }
+
+  /* ============================================================
+     DAILY P&L CHART — Bar chart showing daily P&L
+     ============================================================ */
+  class DailyPnlChart {
+    constructor(canvasId) {
+      this.canvas = document.getElementById(canvasId);
+      this.data = []; // array of { date, total_pnl }
+      this._bind();
+    }
+
+    _bind() {
+      const ro = new ResizeObserver(() => this.render());
+      ro.observe(this.canvas.parentElement);
+    }
+
+    setData(arr) {
+      this.data = arr.map(v => ({
+        date: v.date,
+        total_pnl: parseFloat(v.total_pnl || v.pnl || 0)
+      }));
+      this.render();
+    }
+
+    render() {
+      if (!this.canvas.parentElement) return;
+      const { ctx, w, h } = setupCanvas(this.canvas);
+
+      if (this.data.length === 0) {
+        ctx.fillStyle = CHART_COLORS.gridText;
+        ctx.font = '12px "Inter", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Awaiting daily historical snapshots...', w / 2, h / 2);
+        return;
+      }
+
+      const pad = { top: 16, right: 12, bottom: 24, left: 45 };
+      const cw = w - pad.left - pad.right;
+      const ch = h - pad.top - pad.bottom;
+
+      const pnlVals = this.data.map(d => d.total_pnl);
+      const maxVal = Math.max(...pnlVals.map(Math.abs), 50); // floor of $50 scale
+      const { min: yMin, max: yMax, steps } = niceSteps(-maxVal, maxVal, 4);
+      const yRange = yMax - yMin || 1;
+
+      const toY = (v) => pad.top + ch - ((v - yMin) / yRange) * ch;
+      const zeroY = toY(0);
+
+      // Grid
+      ctx.lineWidth = 1;
+      steps.forEach(sv => {
+        const y = toY(sv);
+        ctx.strokeStyle = CHART_COLORS.grid;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(w - pad.right, y);
+        ctx.stroke();
+
+        ctx.fillStyle = CHART_COLORS.axisText;
+        ctx.font = '9px "JetBrains Mono", monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(formatDollar(sv), pad.left - 8, y + 3);
+      });
+
+      // Zero line
+      ctx.strokeStyle = CHART_COLORS.white20;
+      ctx.beginPath();
+      ctx.moveTo(pad.left, zeroY);
+      ctx.lineTo(w - pad.right, zeroY);
+      ctx.stroke();
+
+      // Bars
+      const numBars = this.data.length;
+      const barW = Math.max(3, Math.floor(cw / numBars) - 2);
+      const gap = (cw - barW * numBars) / (numBars + 1);
+
+      this.data.forEach((day, i) => {
+        const x = pad.left + gap + i * (barW + gap);
+        const yVal = toY(day.total_pnl);
+        const barH = zeroY - yVal;
+
+        const isPositive = day.total_pnl >= 0;
+        const color = isPositive ? CHART_COLORS.green : CHART_COLORS.red;
+        const fadeColor = isPositive ? CHART_COLORS.greenFade : CHART_COLORS.redFade;
+
+        const grad = ctx.createLinearGradient(0, yVal, 0, zeroY);
+        grad.addColorStop(0, color);
+        grad.addColorStop(1, fadeColor);
+
+        ctx.fillStyle = grad;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+
+        ctx.beginPath();
+        ctx.rect(x, zeroY, barW, -barH);
+        ctx.fill();
+        if (barW > 4) ctx.stroke();
+      });
+
+      // X-axis label (date for first and last bar)
+      if (numBars > 0) {
+        ctx.fillStyle = CHART_COLORS.axisText;
+        ctx.font = '8px "JetBrains Mono", monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(this.data[0].date.substring(5), pad.left, pad.top + ch + 14);
+
+        ctx.textAlign = 'right';
+        ctx.fillText(this.data[numBars - 1].date.substring(5), w - pad.right, pad.top + ch + 14);
+      }
+    }
+  }
+
   /* --------------------------------------------------------
      Export to window
      -------------------------------------------------------- */
@@ -652,4 +843,6 @@
   window.DrawdownChart = DrawdownChart;
   window.PnLDistribution = PnLDistribution;
   window.RegimePerfChart = RegimePerfChart;
+  window.WinLossDonutChart = WinLossDonutChart;
+  window.DailyPnlChart = DailyPnlChart;
 })();

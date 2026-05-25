@@ -58,6 +58,7 @@ const config = Object.freeze({
 
   // Paths
   dbPath: env('DB_PATH', path.resolve(__dirname, '..', 'data', 'quantum-edge.db')),
+  databaseUrl: env('DATABASE_URL', ''),
   dashboardPath: path.resolve(__dirname, '..', 'dashboard'),
 
   // Rate Limits

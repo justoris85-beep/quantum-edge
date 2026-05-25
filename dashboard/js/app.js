@@ -14,7 +14,7 @@
   let reconnectDelay = 1000;
   const MAX_RECONNECT_DELAY = 30000;
   let startTime = Date.now();
-  let equityChart, drawdownChart, pnlDistChart, regimePerfChart;
+  let equityChart, drawdownChart, pnlDistChart, regimePerfChart, winLossChart, dailyPnlChart;
   let allTrades = [];
   let lastFactors = null;
   let isPaused = false;
@@ -32,6 +32,8 @@
     drawdownChart = new DrawdownChart('drawdown-chart');
     pnlDistChart = new PnLDistribution('pnl-dist-chart');
     regimePerfChart = new RegimePerfChart('regime-perf-chart');
+    winLossChart = new WinLossDonutChart('win-loss-donut-chart');
+    dailyPnlChart = new DailyPnlChart('daily-pnl-chart');
 
     connectWebSocket();
     fetchInitialData();
@@ -169,13 +171,14 @@
      -------------------------------------------------------- */
   async function fetchInitialData() {
     try {
-      const [status, trades, equity, performance, regime, readiness] = await Promise.all([
+      const [status, trades, equity, performance, regime, readiness, dailyPnl] = await Promise.all([
         safeFetch('/api/status'),
         safeFetch('/api/trades?limit=50'),
         safeFetch('/api/equity'),
         safeFetch('/api/performance'),
         safeFetch('/api/regime'),
         safeFetch('/api/readiness'),
+        safeFetch('/api/performance/daily'),
       ]);
 
       if (status) updateFullStatus(status.data || status);
@@ -195,6 +198,7 @@
       if (performance) updatePerformanceMetrics(performance.data || performance);
       if (regime) updateRegime(regime.data ? (regime.data.current || regime.data) : regime);
       if (readiness) renderReadinessChecklist(readiness.data || readiness);
+      if (dailyPnl) dailyPnlChart.setData(dailyPnl.data || dailyPnl);
 
       if (trades) {
         buildPnLDistribution(allTrades);
@@ -208,12 +212,14 @@
 
   async function fetchPerformance() {
     try {
-      const [perf, read] = await Promise.all([
+      const [perf, read, dailyPnl] = await Promise.all([
         safeFetch('/api/performance'),
-        safeFetch('/api/readiness')
+        safeFetch('/api/readiness'),
+        safeFetch('/api/performance/daily')
       ]);
       if (perf) updatePerformanceMetrics(perf.data || perf);
       if (read) renderReadinessChecklist(read.data || read);
+      if (dailyPnl) dailyPnlChart.setData(dailyPnl.data || dailyPnl);
     } catch (e) { /* silent */ }
   }
 
@@ -250,8 +256,8 @@
         daily_pnl: netPnl,
         daily_pnl_pct: netPnlPct,
         win_rate: data.performance ? data.performance.winRate : (todayStats.wins + todayStats.losses > 0 ? (todayStats.wins / (todayStats.wins + todayStats.losses)) * 100 : 0),
-        wins: todayStats.wins || 0,
-        total_trades: todayStats.total_trades || 0,
+        wins: data.performance ? data.performance.wins : (todayStats.wins || 0),
+        total_trades: data.performance ? data.performance.totalTrades : (todayStats.total_trades || 0),
         sharpe: data.performance ? data.performance.sharpeRatio : 0,
         profit_factor: data.performance ? data.performance.profitFactor : 0,
         max_drawdown: data.account.drawdown,
@@ -426,6 +432,23 @@
         ddEl.textContent = UI.formatPercent(-Math.abs(dd)).replace('+', '');
       }
       setText('dd-current', UI.formatPercent(-Math.abs(dd)));
+    }
+
+    // Detailed Stats Panel Updates
+    if (data.totalTrades != null) setText('detail-total-trades', String(data.totalTrades));
+    if (data.wins != null) setText('detail-wins', String(data.wins));
+    if (data.losses != null) setText('detail-losses', String(data.losses));
+    if (data.breakeven != null) setText('detail-breakeven', String(data.breakeven));
+    if (data.largestWin != null) setText('detail-largest-win', '$' + Number(data.largestWin).toLocaleString('en-US', { minimumFractionDigits: 2 }));
+    if (data.largestLoss != null) setText('detail-largest-loss', '$' + Number(data.largestLoss).toLocaleString('en-US', { minimumFractionDigits: 2 }));
+    if (data.maxWinStreak != null) setText('detail-win-streak', String(data.maxWinStreak));
+    if (data.maxLossStreak != null) setText('detail-loss-streak', String(data.maxLossStreak));
+    if (data.avgHoldTime != null) setText('detail-avg-hold-time', String(data.avgHoldTime));
+    if (data.totalFees != null) setText('detail-total-fees', '$' + Number(data.totalFees).toLocaleString('en-US', { minimumFractionDigits: 2 }));
+
+    // Win/Loss Donut Chart Update
+    if (data.wins != null || data.losses != null || data.breakeven != null) {
+      winLossChart.setData(data.wins || 0, data.losses || 0, data.breakeven || 0);
     }
   }
 
@@ -912,7 +935,29 @@
       profit_factor: 1.78,
       win_rate: 62.5,
       max_drawdown: 1.84,
+      totalTrades: 28,
+      wins: 17,
+      losses: 10,
+      breakeven: 1,
+      largestWin: 382.50,
+      largestLoss: -210.00,
+      maxWinStreak: 5,
+      maxLossStreak: 3,
+      avgHoldTime: '1h 45m',
+      totalFees: 38.40,
     });
+
+    // Generate daily performance snapshots for demo
+    const demoDailySnapshots = [];
+    for (let i = 0; i < 15; i++) {
+      const d = new Date(Date.now() - (15 - i) * 24 * 3600000);
+      const dayPnl = (Math.random() - 0.4) * 150;
+      demoDailySnapshots.push({
+        date: d.toISOString().slice(0, 10),
+        total_pnl: parseFloat(dayPnl.toFixed(2))
+      });
+    }
+    dailyPnlChart.setData(demoDailySnapshots);
 
     const demoReadiness = {
       checklist: [

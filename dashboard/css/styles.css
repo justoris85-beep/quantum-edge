@@ -1377,3 +1377,69 @@ footer {
     text-align: center;
   }
 }
+
+/* --- Performance Breakdown Panel --- */
+.perf-breakdown-body {
+  padding: 16px;
+}
+.perf-breakdown-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr;
+  gap: 16px;
+  align-items: center;
+}
+.donut-chart-container {
+  height: 180px;
+  position: relative;
+}
+.donut-chart-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+.stats-details-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.stats-detail-item {
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+.stats-detail-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+}
+.detail-label {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+.detail-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.detail-value.text-long {
+  color: var(--color-long);
+}
+.detail-value.text-short {
+  color: var(--color-short);
+}
+
+@media (max-width: 640px) {
+  .perf-breakdown-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .donut-chart-container {
+    height: 150px;
+  }
+}

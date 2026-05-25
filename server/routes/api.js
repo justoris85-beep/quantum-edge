@@ -20,11 +20,11 @@ function getEngine(req, res) {
 }
 
 // ─── GET /api/status ─────────────────────────────────────────────
-router.get('/api/status', (req, res) => {
+router.get('/api/status', async (req, res) => {
   try {
     const engine = getEngine(req, res);
     if (!engine) return;
-    const status = engine.getStatus();
+    const status = await engine.getStatus();
     res.json({ success: true, data: status });
   } catch (err) {
     log.error(`API /status error: ${err.message}`);
@@ -33,10 +33,10 @@ router.get('/api/status', (req, res) => {
 });
 
 // ─── GET /api/trades ─────────────────────────────────────────────
-router.get('/api/trades', (req, res) => {
+router.get('/api/trades', async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 50, 500);
-    const trades = db.getAllTrades(limit);
+    const trades = await db.getAllTrades(limit);
     res.json({ success: true, count: trades.length, data: trades });
   } catch (err) {
     log.error(`API /trades error: ${err.message}`);
@@ -58,10 +58,10 @@ router.get('/api/trades/open', (req, res) => {
 });
 
 // ─── GET /api/signals ────────────────────────────────────────────
-router.get('/api/signals', (req, res) => {
+router.get('/api/signals', async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 30, 200);
-    const signals = db.getRecentSignals(limit);
+    const signals = await db.getRecentSignals(limit);
     res.json({ success: true, count: signals.length, data: signals });
   } catch (err) {
     log.error(`API /signals error: ${err.message}`);
@@ -70,10 +70,10 @@ router.get('/api/signals', (req, res) => {
 });
 
 // ─── GET /api/equity ─────────────────────────────────────────────
-router.get('/api/equity', (req, res) => {
+router.get('/api/equity', async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 200, 1000);
-    const equity = db.getEquityHistory(limit);
+    const equity = await db.getEquityHistory(limit);
     res.json({ success: true, count: equity.length, data: equity });
   } catch (err) {
     log.error(`API /equity error: ${err.message}`);
@@ -82,11 +82,11 @@ router.get('/api/equity', (req, res) => {
 });
 
 // ─── GET /api/performance ────────────────────────────────────────
-router.get('/api/performance', (req, res) => {
+router.get('/api/performance', async (req, res) => {
   try {
     const engine = getEngine(req, res);
     if (!engine) return;
-    const metrics = engine.getPerformance();
+    const metrics = await engine.getPerformance();
     res.json({ success: true, data: metrics });
   } catch (err) {
     log.error(`API /performance error: ${err.message}`);
@@ -95,11 +95,11 @@ router.get('/api/performance', (req, res) => {
 });
 
 // ─── GET /api/readiness ──────────────────────────────────────────
-router.get('/api/readiness', (req, res) => {
+router.get('/api/readiness', async (req, res) => {
   try {
     const engine = getEngine(req, res);
     if (!engine) return;
-    const readiness = engine.performanceTracker.getReadinessChecklist(engine.startTime);
+    const readiness = await engine.performanceTracker.getReadinessChecklist(engine.startTime);
     res.json({ success: true, data: readiness });
   } catch (err) {
     log.error(`API /readiness error: ${err.message}`);
@@ -108,12 +108,12 @@ router.get('/api/readiness', (req, res) => {
 });
 
 // ─── GET /api/regime ─────────────────────────────────────────────
-router.get('/api/regime', (req, res) => {
+router.get('/api/regime', async (req, res) => {
   try {
     const engine = getEngine(req, res);
     if (!engine) return;
     const regime = engine.regimeDetector.getStatus();
-    const history = db.getRegimeHistory(50);
+    const history = await db.getRegimeHistory(50);
     res.json({
       success: true,
       data: {
@@ -128,9 +128,9 @@ router.get('/api/regime', (req, res) => {
 });
 
 // ─── GET /api/stats/today ────────────────────────────────────────
-router.get('/api/stats/today', (req, res) => {
+router.get('/api/stats/today', async (req, res) => {
   try {
-    const stats = db.getTodayStats();
+    const stats = await db.getTodayStats();
     const engine = getEngine(req, res);
     if (!engine) return;
 
@@ -151,13 +151,20 @@ router.get('/api/stats/today', (req, res) => {
 });
 
 // ─── POST /api/pause ─────────────────────────────────────────────
-router.post('/api/pause', (req, res) => {
+router.post('/api/pause', async (req, res) => {
   try {
     const engine = getEngine(req, res);
     if (!engine) return;
     const reason = (req.body && req.body.reason) || 'Manual pause via API';
     engine.riskManager.setPaused(true, reason);
     log.system(`Trading paused via API: ${reason}`);
+
+    // Broadcast updated status to all dashboard clients
+    engine.broadcast({
+      type: 'init',
+      data: await engine.getStatus()
+    });
+
     res.json({ success: true, message: `Trading paused: ${reason}` });
   } catch (err) {
     log.error(`API /pause error: ${err.message}`);
@@ -166,12 +173,19 @@ router.post('/api/pause', (req, res) => {
 });
 
 // ─── POST /api/resume ────────────────────────────────────────────
-router.post('/api/resume', (req, res) => {
+router.post('/api/resume', async (req, res) => {
   try {
     const engine = getEngine(req, res);
     if (!engine) return;
     engine.riskManager.setPaused(false, null);
     log.system('Trading resumed via API');
+
+    // Broadcast updated status to all dashboard clients
+    engine.broadcast({
+      type: 'init',
+      data: await engine.getStatus()
+    });
+
     res.json({ success: true, message: 'Trading resumed' });
   } catch (err) {
     log.error(`API /resume error: ${err.message}`);
@@ -180,7 +194,7 @@ router.post('/api/resume', (req, res) => {
 });
 
 // ─── POST /api/close-all ────────────────────────────────────────
-router.post('/api/close-all', (req, res) => {
+router.post('/api/close-all', async (req, res) => {
   try {
     const engine = getEngine(req, res);
     if (!engine) return;
@@ -195,7 +209,7 @@ router.post('/api/close-all', (req, res) => {
     let totalPnl = 0;
 
     for (const pos of positions) {
-      const result = engine.closePosition(pos.trade_id, parseFloat(price), 'manual_close_all');
+      const result = await engine.closePosition(pos.trade_id, parseFloat(price), 'manual_close_all');
       if (result.success) {
         closedCount++;
         totalPnl += result.pnl;
@@ -212,6 +226,21 @@ router.post('/api/close-all', (req, res) => {
     });
   } catch (err) {
     log.error(`API /close-all error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── GET /api/performance/daily ──────────────────────────────────
+router.get('/api/performance/daily', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 30, 365);
+    const resDb = await db.raw.query(`
+      SELECT * FROM performance_snapshots ORDER BY date DESC LIMIT $1
+    `, [limit]);
+    const history = resDb.rows.reverse();
+    res.json({ success: true, count: history.length, data: history });
+  } catch (err) {
+    log.error(`API /performance/daily error: ${err.message}`);
     res.status(500).json({ success: false, error: err.message });
   }
 });

@@ -27,6 +27,9 @@ class PortfolioManager {
       stop_loss: trade.stop_loss || null,
       take_profit: trade.take_profit || null,
       regime_at_entry: trade.regime_at_entry || null,
+      signal_score: trade.signal_score || null,
+      confidence: trade.confidence || null,
+      factors: trade.factors || null,
       unrealized_pnl: 0,
       opened_at: trade.opened_at || new Date().toISOString(),
     });
@@ -153,8 +156,8 @@ class PortfolioManager {
   /**
    * Reload open positions from the database.
    */
-  loadFromDb() {
-    const openTrades = this.db.getOpenTrades();
+  async loadFromDb() {
+    const openTrades = await this.db.getOpenTrades();
     this.positions.clear();
 
     for (const trade of openTrades) {
@@ -169,6 +172,9 @@ class PortfolioManager {
         stop_loss: trade.stop_loss,
         take_profit: trade.take_profit,
         regime_at_entry: trade.regime_at_entry,
+        signal_score: trade.signal_score || null,
+        confidence: trade.confidence || null,
+        factors: trade.factors || null,
         unrealized_pnl: 0,
         opened_at: trade.opened_at,
       });
@@ -179,7 +185,7 @@ class PortfolioManager {
     }
 
     // Restore peak equity from equity snapshots
-    const equityHistory = this.db.getEquityHistory(500);
+    const equityHistory = await this.db.getEquityHistory(500);
     if (equityHistory.length > 0) {
       this.peakEquity = Math.max(this.peakEquity, ...equityHistory.map(e => e.peak_equity));
     }

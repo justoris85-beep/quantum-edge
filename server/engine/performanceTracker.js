@@ -12,9 +12,9 @@ class PerformanceTracker {
    * Compute all performance metrics from closed trades.
    * @returns {object} Full metrics snapshot
    */
-  computeAll() {
-    const trades = this.db.getAllClosedTrades();
-    const equityHistory = this.db.getEquityHistory(500);
+  async computeAll() {
+    const trades = await this.db.getAllClosedTrades();
+    const equityHistory = await this.db.getEquityHistory(500);
 
     if (trades.length === 0) {
       return this._emptyMetrics();
@@ -40,7 +40,29 @@ class PerformanceTracker {
     const peakEquity = equityHistory.length > 0
       ? Math.max(...equityHistory.map(e => e.total_equity))
       : 0;
-    const calmar = this.computeCalmarRatio(trades, peakEquity);
+    const calmar = this.computeCalmarRatio(trades, peakEquity, equityHistory);
+
+    // Calculate streaks (chrono order)
+    let maxWinStreak = 0;
+    let maxLossStreak = 0;
+    let currentWinStreak = 0;
+    let currentLossStreak = 0;
+    const chronoTrades = [...trades].reverse();
+    for (const t of chronoTrades) {
+      if (t.pnl > 0) {
+        currentWinStreak++;
+        currentLossStreak = 0;
+        if (currentWinStreak > maxWinStreak) maxWinStreak = currentWinStreak;
+      } else if (t.pnl < 0) {
+        currentLossStreak++;
+        currentWinStreak = 0;
+        if (currentLossStreak > maxLossStreak) maxLossStreak = currentLossStreak;
+      } else {
+        currentWinStreak = 0;
+        currentLossStreak = 0;
+      }
+    }
+    const totalFees = trades.reduce((s, t) => s + (t.fees || 0), 0);
 
     return {
       totalTrades: trades.length,
@@ -61,6 +83,9 @@ class PerformanceTracker {
       maxDrawdown: parseFloat(maxDrawdown.toFixed(4)),
       winLossRatio: parseFloat(winLossRatio.toFixed(4)),
       avgHoldTime: this._computeAvgHoldTime(trades),
+      maxWinStreak,
+      maxLossStreak,
+      totalFees: parseFloat(totalFees.toFixed(2)),
     };
   }
 
@@ -74,7 +99,13 @@ class PerformanceTracker {
   computeSharpeRatio(trades, riskFreeRate = 0) {
     if (trades.length < 2) return 0;
 
-    const returns = trades.map(t => t.pnl_percent || (t.pnl / Math.max(t.entry_price * t.quantity, 1)));
+    const returns = trades.map(t => {
+      if (t.pnl_percent !== undefined && t.pnl_percent !== null) {
+        return parseFloat(t.pnl_percent);
+      }
+      const notional = t.entry_price * t.quantity;
+      return notional > 0 ? (t.pnl / notional) * 100 : 0;
+    });
     const meanReturn = returns.reduce((s, r) => s + r, 0) / returns.length;
 
     const variance = returns.reduce((s, r) => s + Math.pow(r - meanReturn, 2), 0) / (returns.length - 1);
@@ -100,7 +131,13 @@ class PerformanceTracker {
   computeSortinoRatio(trades, riskFreeRate = 0) {
     if (trades.length < 2) return 0;
 
-    const returns = trades.map(t => t.pnl_percent || (t.pnl / Math.max(t.entry_price * t.quantity, 1)));
+    const returns = trades.map(t => {
+      if (t.pnl_percent !== undefined && t.pnl_percent !== null) {
+        return parseFloat(t.pnl_percent);
+      }
+      const notional = t.entry_price * t.quantity;
+      return notional > 0 ? (t.pnl / notional) * 100 : 0;
+    });
     const meanReturn = returns.reduce((s, r) => s + r, 0) / returns.length;
 
     // Downside deviation: only negative returns
@@ -124,10 +161,9 @@ class PerformanceTracker {
    * @param {number} peakEquity
    * @returns {number}
    */
-  computeCalmarRatio(trades, peakEquity) {
+  computeCalmarRatio(trades, peakEquity, equityHistory) {
     if (trades.length === 0 || peakEquity === 0) return 0;
 
-    const equityHistory = this.db.getEquityHistory(500);
     const maxDD = this.computeMaxDrawdown(equityHistory);
     if (maxDD === 0) return 0;
 
@@ -230,8 +266,8 @@ class PerformanceTracker {
    * Return formatted metrics for API/dashboard.
    * @returns {object}
    */
-  getMetrics() {
-    return this.computeAll();
+  async getMetrics() {
+    return await this.computeAll();
   }
 
   /**
@@ -262,10 +298,10 @@ class PerformanceTracker {
    * @param {number} serverStartTime - Fallback start time if database is empty
    * @returns {object} Checklist items and progress
    */
-  getReadinessChecklist(serverStartTime) {
-    const trades = this.db.getAllClosedTrades();
-    const equityHistory = this.db.getEquityHistory(500);
-    const metrics = this.computeAll();
+  async getReadinessChecklist(serverStartTime) {
+    const trades = await this.db.getAllClosedTrades();
+    const equityHistory = await this.db.getEquityHistory(500);
+    const metrics = await this.computeAll();
 
     // 1. Sample Size (>= 100 closed trades)
     const totalTrades = metrics.totalTrades;
@@ -292,7 +328,7 @@ class PerformanceTracker {
     const expectancyPassed = expectancy > 0;
 
     // 7. Time in Paper (>= 14 days)
-    const firstEventTime = this.db.getFirstEventTime();
+    const firstEventTime = await this.db.getFirstEventTime();
     const startMs = firstEventTime ? new Date(firstEventTime.replace(' ', 'T') + 'Z').getTime() : (serverStartTime || Date.now());
     const timeInPaperMs = Date.now() - startMs;
     const timeInPaperDays = Math.max(0, timeInPaperMs / (1000 * 60 * 60 * 24));

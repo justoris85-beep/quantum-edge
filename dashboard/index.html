@@ -88,73 +88,6 @@
     <!-- LEFT COLUMN -->
     <div class="grid-col-left">
 
-      <!-- Open Positions Panel -->
-      <section class="panel" id="positions-panel">
-        <div class="panel-header">
-          <div class="panel-title">
-            <span class="panel-icon">📌</span>
-            Open Positions
-            <span class="badge" id="positions-count">0</span>
-          </div>
-          <button class="btn btn-danger btn-sm" id="btn-close-all" title="Close all positions">Close All</button>
-        </div>
-        <div class="panel-body scrollable">
-          <table class="data-table" id="positions-table">
-            <thead>
-              <tr>
-                <th title="Direction: BUY (Long) or SELL (Short)">Side</th>
-                <th title="Trading Pair (BTC/USDT)">Pair</th>
-                <th title="Position size in BTC units">Qty</th>
-                <th title="Price at which position was entered">Entry</th>
-                <th title="Stop Loss (SL) and Take Profit (TP) target prices">SL / TP</th>
-                <th title="Market regime when position was entered">Regime</th>
-                <th title="Multi-factor entry score (out of 10)">Score</th>
-                <th title="Current unrealized profit or loss in USD">Unr. P&amp;L</th>
-              </tr>
-            </thead>
-            <tbody id="positions-body"></tbody>
-          </table>
-          <div class="empty-state" id="positions-empty">
-            <div class="empty-icon">📭</div>
-            <div class="empty-text">No open positions</div>
-            <div class="empty-sub">Waiting for signals...</div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Trade History Panel -->
-      <section class="panel" id="history-panel">
-        <div class="panel-header">
-          <div class="panel-title">
-            <span class="panel-icon">📜</span>
-            Trade History
-            <span class="badge" id="history-count">0</span>
-          </div>
-        </div>
-        <div class="panel-body scrollable scrollable-lg">
-          <table class="data-table" id="history-table">
-            <thead>
-              <tr>
-                <th title="Time when the trade was closed and settled">Time</th>
-                <th title="Direction: BUY (Long) or SELL (Short)">Side</th>
-                <th title="Trading Pair (BTC/USDT)">Pair</th>
-                <th title="Average entry fill price">Entry</th>
-                <th title="Average exit fill price">Exit</th>
-                <th title="Realized net profit or loss in USD (minus fees)">P&amp;L</th>
-                <th title="Percentage return relative to entry price">P&amp;L %</th>
-                <th title="Multi-factor entry score (out of 10)">Score</th>
-              </tr>
-            </thead>
-            <tbody id="history-body"></tbody>
-          </table>
-          <div class="empty-state" id="history-empty">
-            <div class="empty-icon">📋</div>
-            <div class="empty-text">No trade history</div>
-            <div class="empty-sub">Completed trades appear here</div>
-          </div>
-        </div>
-      </section>
-
       <!-- Factor Attribution Panel -->
       <section class="panel" id="factors-panel">
         <div class="panel-header">
@@ -199,6 +132,132 @@
             <div class="factor-label">HTF Confirm</div>
             <div class="factor-bar-track"><div class="factor-bar-fill" data-factor="htf" style="width:0%"></div></div>
             <div class="factor-score mono" data-factor-val="htf">0.0</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Open Positions Panel -->
+      <section class="panel" id="positions-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon">📌</span>
+            Open Positions
+            <span class="badge" id="positions-count">0</span>
+          </div>
+          <button class="btn btn-danger btn-sm" id="btn-close-all" title="Close all positions">Close All</button>
+        </div>
+        <div class="panel-body scrollable">
+          <table class="data-table" id="positions-table">
+            <thead>
+              <tr>
+                <th title="Direction: BUY (Long) or SELL (Short)">Side</th>
+                <th title="Trading Pair (BTC/USDT)">Pair</th>
+                <th title="Position size in BTC units">Qty</th>
+                <th title="Price at which position was entered">Entry</th>
+                <th title="Stop Loss (SL) and Take Profit (TP) target prices">SL / TP</th>
+                <th title="Market regime when position was entered">Regime</th>
+                <th title="Multi-factor entry score (out of 10)">Score</th>
+                <th title="Current unrealized profit or loss in USD">Unr. P&amp;L</th>
+              </tr>
+            </thead>
+            <tbody id="positions-body"></tbody>
+          </table>
+          <div class="empty-state" id="positions-empty">
+            <div class="empty-icon">📭</div>
+            <div class="empty-text">No open positions</div>
+            <div class="empty-sub">Waiting for signals...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Performance Breakdown Panel -->
+      <section class="panel" id="performance-breakdown-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon">📊</span>
+            Performance Breakdown &amp; Statistics
+          </div>
+        </div>
+        <div class="panel-body perf-breakdown-body">
+          <div class="perf-breakdown-grid">
+            <div class="donut-chart-container">
+              <canvas id="win-loss-donut-chart"></canvas>
+            </div>
+            <div class="stats-details-list">
+              <div class="stats-detail-item" title="Total trades closed since inception">
+                <span class="detail-label">Total Trades</span>
+                <span class="detail-value mono" id="detail-total-trades">0</span>
+              </div>
+              <div class="stats-detail-item" title="Profitable trades count (Wins)">
+                <span class="detail-label text-long">Winning Trades</span>
+                <span class="detail-value mono text-long" id="detail-wins">0</span>
+              </div>
+              <div class="stats-detail-item" title="Unprofitable trades count (Losses)">
+                <span class="detail-label text-short">Losing Trades</span>
+                <span class="detail-value mono text-short" id="detail-losses">0</span>
+              </div>
+              <div class="stats-detail-item" title="Breakeven trades count">
+                <span class="detail-label">Breakeven Trades</span>
+                <span class="detail-value mono" id="detail-breakeven">0</span>
+              </div>
+              <div class="stats-detail-item" title="Largest winning trade in USD">
+                <span class="detail-label">Largest Win</span>
+                <span class="detail-value mono text-long" id="detail-largest-win">$0.00</span>
+              </div>
+              <div class="stats-detail-item" title="Largest losing trade in USD">
+                <span class="detail-label">Largest Loss</span>
+                <span class="detail-value mono text-short" id="detail-largest-loss">$0.00</span>
+              </div>
+              <div class="stats-detail-item" title="Maximum consecutive winning trades">
+                <span class="detail-label">Max Win Streak</span>
+                <span class="detail-value mono text-long" id="detail-win-streak">0</span>
+              </div>
+              <div class="stats-detail-item" title="Maximum consecutive losing trades">
+                <span class="detail-label">Max Loss Streak</span>
+                <span class="detail-value mono text-short" id="detail-loss-streak">0</span>
+              </div>
+              <div class="stats-detail-item" title="Average hold time per closed trade">
+                <span class="detail-label">Avg Hold Time</span>
+                <span class="detail-value mono" id="detail-avg-hold-time">N/A</span>
+              </div>
+              <div class="stats-detail-item" title="Total cumulative trading fees paid">
+                <span class="detail-label">Total Fees</span>
+                <span class="detail-value mono" id="detail-total-fees">$0.00</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Trade History Panel -->
+      <section class="panel" id="history-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon">📜</span>
+            Trade History
+            <span class="badge" id="history-count">0</span>
+          </div>
+        </div>
+        <div class="panel-body scrollable scrollable-lg">
+          <table class="data-table" id="history-table">
+            <thead>
+              <tr>
+                <th title="Time when the trade was closed and settled">Time</th>
+                <th title="Direction: BUY (Long) or SELL (Short)">Side</th>
+                <th title="Trading Pair (BTC/USDT)">Pair</th>
+                <th title="Average entry fill price">Entry</th>
+                <th title="Average exit fill price">Exit</th>
+                <th title="Realized net profit or loss in USD (minus fees)">P&amp;L</th>
+                <th title="Percentage return relative to entry price">P&amp;L %</th>
+                <th title="Multi-factor entry score (out of 10)">Score</th>
+              </tr>
+            </thead>
+            <tbody id="history-body"></tbody>
+          </table>
+          <div class="empty-state" id="history-empty">
+            <div class="empty-icon">📋</div>
+            <div class="empty-text">No trade history</div>
+            <div class="empty-sub">Completed trades appear here</div>
           </div>
         </div>
       </section>
@@ -258,6 +317,18 @@
         </div>
         <div class="panel-body chart-body">
           <canvas id="regime-perf-chart"></canvas>
+      </section>
+
+      <!-- Daily P&L Chart -->
+      <section class="panel" id="daily-pnl-panel" title="Daily P&amp;L: Profit or loss recorded per calendar day over the last 30 active trading days.">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon">📅</span>
+            Daily Net P&amp;L History
+          </div>
+        </div>
+        <div class="panel-body chart-body">
+          <canvas id="daily-pnl-chart"></canvas>
         </div>
       </section>
 
@@ -281,6 +352,18 @@
             <div class="readiness-progress-text" id="readiness-progress-text">0% Complete</div>
           </div>
         </div>
+      </section>
+
+      <!-- Live Activity Feed -->
+      <section class="panel" id="activity-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon">⚡</span>
+            Live Activity
+            <span class="live-dot"></span>
+          </div>
+        </div>
+        <div class="panel-body scrollable scrollable-md" id="activity-feed"></div>
       </section>
 
       <!-- Quant Metrics Panel -->
@@ -325,18 +408,6 @@
             </div>
           </div>
         </div>
-      </section>
-
-      <!-- Live Activity Feed -->
-      <section class="panel" id="activity-panel">
-        <div class="panel-header">
-          <div class="panel-title">
-            <span class="panel-icon">⚡</span>
-            Live Activity
-            <span class="live-dot"></span>
-          </div>
-        </div>
-        <div class="panel-body scrollable scrollable-md" id="activity-feed"></div>
       </section>
 
       <!-- Agent Controls -->

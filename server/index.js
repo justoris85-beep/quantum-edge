@@ -57,6 +57,7 @@ const app = express();
 
 // Body parsing
 app.use(express.json({ limit: '1mb' }));
+app.use(express.text({ type: 'text/plain', limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // CORS for dashboard
@@ -107,25 +108,25 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 const engine = new QuantEngine();
 app.locals.engine = engine;
 
-wss.on('connection', (ws, req) => {
+wss.on('connection', async (ws, req) => {
   engine.registerWsClient(ws);
 
   // Send initial status on connect
   try {
-    const status = engine.getStatus();
+    const status = await engine.getStatus();
     ws.send(JSON.stringify({ type: 'init', data: status }));
   } catch (err) {
     log.error(`Error sending init status: ${err.message}`);
   }
 
-  ws.on('message', (data) => {
+  ws.on('message', async (data) => {
     try {
       const msg = JSON.parse(data.toString());
       // Handle ping/pong or status requests from dashboard
       if (msg.type === 'ping') {
         ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
       } else if (msg.type === 'status') {
-        const status = engine.getStatus();
+        const status = await engine.getStatus();
         ws.send(JSON.stringify({ type: 'status', data: status }));
       }
     } catch (_) {
@@ -149,18 +150,18 @@ let performanceInterval = null;
 
 function startIntervals() {
   // Equity snapshot every 5 minutes
-  equityInterval = setInterval(() => {
+  equityInterval = setInterval(async () => {
     try {
-      engine.takeEquitySnapshot();
+      await engine.takeEquitySnapshot();
     } catch (err) {
       log.error(`Equity snapshot error: ${err.message}`);
     }
   }, config.equitySnapshotIntervalMs);
 
   // Performance snapshot every hour
-  performanceInterval = setInterval(() => {
+  performanceInterval = setInterval(async () => {
     try {
-      engine.takePerformanceSnapshot();
+      await engine.takePerformanceSnapshot();
     } catch (err) {
       log.error(`Performance snapshot error: ${err.message}`);
     }
@@ -178,7 +179,7 @@ function clearIntervals() {
 // ─── Graceful Shutdown ───────────────────────────────────────────
 let shuttingDown = false;
 
-function gracefulShutdown(signal) {
+async function gracefulShutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
 
@@ -193,7 +194,7 @@ function gracefulShutdown(signal) {
 
   // Shutdown engine (saves snapshots, closes DB)
   try {
-    engine.shutdown();
+    await engine.shutdown();
   } catch (err) {
     log.error(`Engine shutdown error: ${err.message}`);
   }
@@ -225,24 +226,29 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // ─── Start Server ────────────────────────────────────────────────
-server.listen(config.port, () => {
+server.listen(config.port, async () => {
   printStartupBanner();
 
-  // Initialize the engine
-  engine.initialize();
+  try {
+    // Initialize the engine
+    await engine.initialize();
 
-  // Take initial equity snapshot
-  engine.takeEquitySnapshot();
+    // Take initial equity snapshot
+    await engine.takeEquitySnapshot();
 
-  // Start scheduled intervals
-  startIntervals();
+    // Start scheduled intervals
+    startIntervals();
 
-  log.system(`Quantum Edge v2.0.0 listening on port ${config.port}`);
-  log.system(`Webhook endpoint: http://localhost:${config.port}/webhook`);
-  log.system(`Dashboard API:    http://localhost:${config.port}/api/status`);
-  log.system(`WebSocket:        ws://localhost:${config.port}/ws`);
-  log.system(`Health check:     http://localhost:${config.port}/health`);
-  log.system('Awaiting signals...');
+    log.system(`Quantum Edge v2.0.0 listening on port ${config.port}`);
+    log.system(`Webhook endpoint: http://localhost:${config.port}/webhook`);
+    log.system(`Dashboard API:    http://localhost:${config.port}/api/status`);
+    log.system(`WebSocket:        ws://localhost:${config.port}/ws`);
+    log.system(`Health check:     http://localhost:${config.port}/health`);
+    log.system('Awaiting signals...');
+  } catch (err) {
+    log.error(`Engine startup failed: ${err.message}`);
+    process.exit(1);
+  }
 });
 
 module.exports = { app, server };
