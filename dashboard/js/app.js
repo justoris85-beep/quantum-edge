@@ -292,7 +292,7 @@
         positions: data.positions ? (Array.isArray(data.positions.positions) ? data.positions.positions : (Array.isArray(data.positions) ? data.positions : [])) : [],
         paused: data.risk ? data.risk.paused : false,
         risk: data.risk || null,
-        regime: data.regime ? data.regime.regime : null,
+        regime: data.regime ? (data.regime.regime || data.regime.currentRegime) : null,
         readiness: data.readiness || null
       };
     }
@@ -403,7 +403,7 @@
      -------------------------------------------------------- */
   function updateRegime(data) {
     if (!data) return;
-    const regime = typeof data === 'string' ? data : data.regime || data.type || 'unknown';
+    const regime = typeof data === 'string' ? data : (data.regime || data.currentRegime || data.type || 'unknown');
     const pill = $('regime-indicator');
     const text = $('regime-text');
     const icon = pill ? pill.querySelector('.regime-icon') : null;
@@ -452,6 +452,12 @@
     
     const wr = data.win_rate != null ? data.win_rate : data.winRate;
     if (wr != null) setText('winrate-value', UI.formatPercent(wr).replace('+', ''));
+
+    const totalTrades = data.total_trades != null ? data.total_trades : data.totalTrades;
+    const wins = data.wins != null ? data.wins : data.wins;
+    if (wins != null && totalTrades != null) {
+      setText('winrate-sub', wins + ' / ' + totalTrades + ' trades');
+    }
 
     const dd = data.max_drawdown != null ? data.max_drawdown : data.maxDrawdown;
     if (dd != null) {

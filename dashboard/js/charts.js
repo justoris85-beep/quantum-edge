@@ -117,8 +117,17 @@
       const cw = w - pad.left - pad.right;
       const ch = h - pad.top - pad.bottom;
 
-      const min = Math.min(...this.data);
-      const max = Math.max(...this.data);
+      let min = Math.min(...this.data);
+      let max = Math.max(...this.data);
+      
+      // Enforce a minimum range of $100 to prevent micro-fluctuations (e.g. 18-cent loss)
+      // from looking like a massive visual plunge.
+      if (max - min < 100) {
+        const avg = (min + max) / 2;
+        min = avg - 50;
+        max = avg + 50;
+      }
+
       const { min: yMin, max: yMax, steps } = niceSteps(min, max, 5);
       const yRange = yMax - yMin || 1;
 

@@ -46,6 +46,16 @@ class QuantEngine {
       const latest = equityHistory[equityHistory.length - 1];
       this.paperBalance = latest.balance;
       log.info(`Restored balance: $${this.paperBalance.toFixed(2)} from last equity snapshot`);
+    } else {
+      // Seed initial equity snapshot so charts have at least 2 points on startup
+      await db.insertEquitySnapshot({
+        balance: config.initialBalance,
+        unrealized_pnl: 0,
+        total_equity: config.initialBalance,
+        drawdown_pct: 0,
+        peak_equity: config.initialBalance,
+      });
+      log.info(`Seeded initial equity snapshot: $${config.initialBalance}`);
     }
 
     // Restore regime from latest history
