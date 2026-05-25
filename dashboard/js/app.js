@@ -273,7 +273,7 @@
         sharpe: data.performance ? data.performance.sharpeRatio : 0,
         profit_factor: data.performance ? data.performance.profitFactor : 0,
         max_drawdown: data.account.drawdown,
-        positions: data.positions || [],
+        positions: data.positions ? (Array.isArray(data.positions.positions) ? data.positions.positions : (Array.isArray(data.positions) ? data.positions : [])) : [],
         paused: data.risk ? data.risk.paused : false,
         risk: data.risk || null,
         regime: data.regime ? data.regime.regime : null,
