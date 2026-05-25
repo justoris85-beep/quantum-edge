@@ -140,6 +140,11 @@
   function createPositionRow(pos) {
     const tr = el('tr');
     tr.className = 'row-enter';
+    
+    const tradeId = pos.trade_id || pos.tradeId;
+    if (tradeId) {
+      tr.setAttribute('data-trade-id', tradeId);
+    }
 
     // Side
     const tdSide = el('td', sideClass(pos.side), sideLabel(pos.side));
@@ -167,15 +172,17 @@
 
     // Regime mini pill
     const tdRegime = el('td');
-    const rClass = regimeClass(pos.regime);
-    const rPill = el('span', 'regime-mini ' + rClass, regimeLabel(pos.regime));
+    const rVal = pos.regime !== undefined ? pos.regime : pos.regime_at_entry;
+    const rClass = regimeClass(rVal);
+    const rPill = el('span', 'regime-mini ' + rClass, regimeLabel(rVal));
     rPill.setAttribute('title', 'Market regime when this position was opened');
     tdRegime.appendChild(rPill);
     tr.appendChild(tdRegime);
 
     // Score
     const tdScore = el('td');
-    const sBadge = el('span', 'score-badge ' + scoreClass(pos.score), formatNumber(pos.score, 1));
+    const scoreVal = pos.score !== undefined ? pos.score : (pos.signal_score !== undefined ? pos.signal_score : 0);
+    const sBadge = el('span', 'score-badge ' + scoreClass(scoreVal), formatNumber(scoreVal, 1));
     sBadge.setAttribute('title', 'Multi-factor strategy signal score at entry (out of 10)');
     tdScore.appendChild(sBadge);
     tr.appendChild(tdScore);
@@ -224,7 +231,8 @@
 
     // Score
     const tdScore = el('td');
-    const sB = el('span', 'score-badge ' + scoreClass(trade.score), formatNumber(trade.score, 1));
+    const scoreVal = trade.score !== undefined ? trade.score : (trade.signal_score !== undefined ? trade.signal_score : 0);
+    const sB = el('span', 'score-badge ' + scoreClass(scoreVal), formatNumber(scoreVal, 1));
     sB.setAttribute('title', 'Multi-factor strategy signal score when the trade was opened');
     tdScore.appendChild(sB);
     tr.appendChild(tdScore);

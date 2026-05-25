@@ -199,17 +199,16 @@ router.post('/api/close-all', async (req, res) => {
     const engine = getEngine(req, res);
     if (!engine) return;
 
-    const price = (req.body && req.body.price) || null;
-    if (!price) {
-      return res.status(400).json({ success: false, error: 'Price required to close positions' });
-    }
+    let priceInput = (req.body && req.body.price) ? parseFloat(req.body.price) : null;
+    const fallbackPrice = priceInput || engine.lastPrice;
 
     const positions = engine.portfolioManager.getAllPositions();
     let closedCount = 0;
     let totalPnl = 0;
 
     for (const pos of positions) {
-      const result = await engine.closePosition(pos.trade_id, parseFloat(price), 'manual_close_all');
+      const exitPrice = fallbackPrice || pos.entry_price || pos.fill_price || 0;
+      const result = await engine.closePosition(pos.trade_id, exitPrice, 'manual_close_all');
       if (result.success) {
         closedCount++;
         totalPnl += result.pnl;

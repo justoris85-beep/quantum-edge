@@ -25,6 +25,7 @@ class QuantEngine {
     this.totalSignalsReceived = 0;
     this.totalTradesExecuted = 0;
     this.startTime = null;
+    this.lastPrice = null;
   }
 
   /**
@@ -87,6 +88,9 @@ class QuantEngine {
   async processSignal(payload) {
     this.totalSignalsReceived++;
     const signalId = uuidv4();
+    if (payload && payload.price) {
+      this.lastPrice = payload.price;
+    }
 
     log.signal(`Signal received: ${payload.action} | price=$${payload.price} | score=${payload.signal_score || '?'} | regime=${payload.regime || '?'}`);
 

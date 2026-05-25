@@ -69,12 +69,28 @@
       reconnectDelay = 1000;
       updateWsStatus('connected');
       updateAgentStatus('connected', 'Online');
-      addActivity('info', 'WebSocket connected');
-      if (demoInterval) {
+      
+      const wasInDemo = (demoInterval !== null);
+      if (wasInDemo) {
         clearInterval(demoInterval);
         demoInterval = null;
+        
+        // Reset local data
+        allTrades = [];
+        
+        // Clear activity feed of demo entries
+        const feed = $('activity-feed');
+        if (feed) {
+          feed.innerHTML = '';
+          activityCount = 0;
+        }
         addActivity('info', 'Demo mode disabled — connected to live engine');
+      } else {
+        addActivity('info', 'WebSocket connected');
       }
+      
+      // Fetch fresh live data to ensure we are in sync
+      fetchInitialData();
     };
 
     ws.onmessage = function (event) {
@@ -518,6 +534,17 @@
      -------------------------------------------------------- */
   function handleTradeOpen(data) {
     if (!data) return;
+    
+    // Avoid duplicate rows
+    const tradeId = data.trade_id || data.tradeId;
+    if (tradeId) {
+      const existing = document.querySelector(`[data-trade-id="${tradeId}"]`);
+      if (existing) {
+        console.log(`Trade ${tradeId} already rendered in positions, skipping duplicate.`);
+        return;
+      }
+    }
+    
     addActivity('trade', 'Opened ' + UI.sideLabel(data.side) + ' ' + (data.pair || 'BTC/USDT') + ' @ ' + UI.formatPrice(data.entry || data.entry_price));
 
     // Add to positions
