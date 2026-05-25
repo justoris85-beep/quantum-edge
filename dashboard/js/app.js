@@ -570,9 +570,30 @@
     const pnl = data.pnl || data.realized_pnl || 0;
     addActivity('trade', 'Closed ' + UI.sideLabel(data.side) + ' ' + (data.pair || 'BTC/USDT') + ' P&L: ' + UI.formatPnl(pnl));
 
-    // Add to history list
-    allTrades.unshift(data);
+    // Update or insert the trade in allTrades
+    const tradeId = data.trade_id || data.tradeId;
+    const existingIndex = allTrades.findIndex(t => (t.trade_id || t.tradeId) === tradeId);
+    if (existingIndex !== -1) {
+      allTrades[existingIndex] = data;
+    } else {
+      allTrades.unshift(data);
+    }
     renderTradeHistory(allTrades);
+
+    // Remove from positions table
+    if (tradeId) {
+      const row = document.querySelector(`#positions-body [data-trade-id="${tradeId}"]`);
+      if (row) {
+        row.remove();
+      }
+      
+      const tbody = $('positions-body');
+      const empty = $('positions-empty');
+      if (tbody && tbody.children.length === 0) {
+        if (empty) empty.style.display = '';
+      }
+      updatePositionCount();
+    }
 
     // Update charts
     buildPnLDistribution(allTrades);
@@ -671,13 +692,17 @@
     if (!tbody) return;
 
     tbody.innerHTML = '';
-    if (trades.length === 0) {
+    
+    // Filter only closed trades
+    const closedTrades = trades.filter(t => t.status === 'closed' || t.closed_at);
+
+    if (closedTrades.length === 0) {
       if (empty) empty.style.display = '';
     } else {
       if (empty) empty.style.display = 'none';
       
       // Sort trades descending: latest trade (closed_at or opened_at) first
-      const sortedTrades = [...trades].sort((a, b) => {
+      const sortedTrades = [...closedTrades].sort((a, b) => {
         const timeA = new Date(a.closed_at || a.opened_at || 0).getTime();
         const timeB = new Date(b.closed_at || b.opened_at || 0).getTime();
         return timeB - timeA;
@@ -687,7 +712,7 @@
         tbody.appendChild(UI.createHistoryRow(trade));
       });
     }
-    updateHistoryCount(trades.length);
+    updateHistoryCount(closedTrades.length);
   }
 
   function updatePositionCount(count) {
