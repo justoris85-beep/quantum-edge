@@ -70,6 +70,11 @@
       updateWsStatus('connected');
       updateAgentStatus('connected', 'Online');
       addActivity('info', 'WebSocket connected');
+      if (demoInterval) {
+        clearInterval(demoInterval);
+        demoInterval = null;
+        addActivity('info', 'Demo mode disabled — connected to live engine');
+      }
     };
 
     ws.onmessage = function (event) {
@@ -181,7 +186,14 @@
         safeFetch('/api/performance/daily'),
       ]);
 
-      if (status) updateFullStatus(status.data || status);
+      if (status) {
+        updateFullStatus(status.data || status);
+        if (demoInterval) {
+          clearInterval(demoInterval);
+          demoInterval = null;
+          addActivity('info', 'Demo mode disabled — live engine data loaded');
+        }
+      }
       if (trades) {
         allTrades = trades.data || (Array.isArray(trades) ? trades : trades.trades || []);
         renderTradeHistory(allTrades);
@@ -192,7 +204,7 @@
         buildDrawdownFromEquity(eqArr);
         if (eqArr.length > 0) {
           const last = eqArr[eqArr.length - 1];
-          updateEquityDisplay(typeof last === 'object' ? last.value || last.total : last);
+          updateEquityDisplay(typeof last === 'object' ? (last.total_equity !== undefined ? last.total_equity : last.value || last.total) : last);
         }
       }
       if (performance) updatePerformanceMetrics(performance.data || performance);
@@ -703,7 +715,7 @@
   function buildDrawdownFromEquity(equityData) {
     if (!equityData || equityData.length < 2) return;
 
-    const values = equityData.map((v) => (typeof v === 'object' ? v.value || v.total || v : v));
+    const values = equityData.map((v) => (typeof v === 'object' ? (v.total_equity !== undefined ? v.total_equity : v.value || v.total) : v));
     const ddSeries = [];
     let peak = values[0];
 

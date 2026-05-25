@@ -94,7 +94,7 @@
 
     setData(arr) {
       // arr: array of numbers (equity values) or {value, ts}
-      this.data = arr.map(v => (typeof v === 'object' ? v.value || v.total || v : v));
+      this.data = arr.map(v => (typeof v === 'object' ? (v.total_equity !== undefined ? v.total_equity : (v.value || v.total || v)) : v));
       this.render();
     }
 
