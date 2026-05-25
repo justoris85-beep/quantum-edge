@@ -821,44 +821,66 @@
      DEMO MODE — Generates realistic data when no backend
      -------------------------------------------------------- */
   function loadDemoData() {
-    addActivity('info', 'Loading demonstration data...');
+    addActivity('info', 'Loading demonstration data (cached)...');
 
-    // Generate equity curve
-    const equityData = [];
-    let equity = 10000;
-    for (let i = 0; i < 120; i++) {
-      equity += (Math.random() - 0.42) * 80;
-      equity = Math.max(equity, 8500);
-      equityData.push(parseFloat(equity.toFixed(2)));
+    let stored = localStorage.getItem('quantum_edge_demo_cache');
+    let demoData = null;
+    if (stored) {
+      try {
+        demoData = JSON.parse(stored);
+      } catch (e) {
+        demoData = null;
+      }
     }
+
+    if (!demoData) {
+      // Generate equity curve
+      const equityData = [];
+      let equity = 10000;
+      for (let i = 0; i < 120; i++) {
+        equity += (Math.random() - 0.42) * 80;
+        equity = Math.max(equity, 8500);
+        equityData.push(parseFloat(equity.toFixed(2)));
+      }
+
+      // Generate demo trades
+      const demoTrades = [];
+      const sides = ['long', 'short'];
+      const regimes = ['trending', 'ranging', 'volatile'];
+      let tradeEquity = 10000;
+      for (let i = 0; i < 28; i++) {
+        const side = sides[Math.random() > 0.55 ? 0 : 1];
+        const entry = 67000 + Math.random() * 4000;
+        const pnl = (Math.random() - 0.42) * 300;
+        const exit = side === 'long' ? entry + pnl / 0.01 : entry - pnl / 0.01;
+        tradeEquity += pnl;
+        const d = new Date(Date.now() - (28 - i) * 3600000 * 2);
+        demoTrades.push({
+          closed_at: d.toISOString(),
+          side: side,
+          pair: 'BTC/USDT',
+          entry_price: entry,
+          exit_price: exit,
+          pnl: parseFloat(pnl.toFixed(2)),
+          pnl_pct: parseFloat(((pnl / tradeEquity) * 100).toFixed(3)),
+          score: parseFloat((4 + Math.random() * 6).toFixed(1)),
+          regime: regimes[Math.floor(Math.random() * regimes.length)],
+        });
+      }
+
+      demoData = {
+        equityData,
+        demoTrades,
+        balance: equityData[equityData.length - 1],
+      };
+      localStorage.setItem('quantum_edge_demo_cache', JSON.stringify(demoData));
+    }
+
+    const { equityData, demoTrades } = demoData;
     equityChart.setData(equityData);
     buildDrawdownFromEquity(equityData);
     updateEquityDisplay(equityData[equityData.length - 1]);
 
-    // Generate demo trades
-    const demoTrades = [];
-    const sides = ['long', 'short'];
-    const regimes = ['trending', 'ranging', 'volatile'];
-    let tradeEquity = 10000;
-    for (let i = 0; i < 28; i++) {
-      const side = sides[Math.random() > 0.55 ? 0 : 1];
-      const entry = 67000 + Math.random() * 4000;
-      const pnl = (Math.random() - 0.42) * 300;
-      const exit = side === 'long' ? entry + pnl / 0.01 : entry - pnl / 0.01;
-      tradeEquity += pnl;
-      const d = new Date(Date.now() - (28 - i) * 3600000 * 2);
-      demoTrades.push({
-        closed_at: d.toISOString(),
-        side: side,
-        pair: 'BTC/USDT',
-        entry_price: entry,
-        exit_price: exit,
-        pnl: parseFloat(pnl.toFixed(2)),
-        pnl_pct: parseFloat(((pnl / tradeEquity) * 100).toFixed(3)),
-        score: parseFloat((4 + Math.random() * 6).toFixed(1)),
-        regime: regimes[Math.floor(Math.random() * regimes.length)],
-      });
-    }
     allTrades = demoTrades;
     renderTradeHistory(allTrades);
     buildPnLDistribution(allTrades);
@@ -915,8 +937,8 @@
       agent_active: true,
       pair: 'BTC/USDT',
       balance: equityData[equityData.length - 1],
-      daily_pnl: 187.32,
-      daily_pnl_pct: 1.87,
+      daily_pnl: equityData[equityData.length - 1] - 10000,
+      daily_pnl_pct: ((equityData[equityData.length - 1] - 10000) / 10000) * 100,
       win_rate: 62.5,
       wins: 17,
       total_trades: 28,
@@ -958,7 +980,9 @@
 
   function startDemoMode() {
     if (demoInterval) return;
-    let demoEquity = parseFloat(($('equity-current')?.textContent || '10000').replace(/[^0-9.\-]/g, '')) || 10000;
+    let stored = localStorage.getItem('quantum_edge_demo_cache');
+    let demoData = stored ? JSON.parse(stored) : { balance: 10000, equityData: [10000] };
+    let demoEquity = demoData.balance;
     let tickCount = 0;
 
     demoInterval = setInterval(() => {
@@ -971,7 +995,12 @@
       equityChart.addPoint(parseFloat(demoEquity.toFixed(2)));
       updateEquityDisplay(demoEquity);
 
-      // Update balance
+      // Save updated balance and equity back to local storage
+      demoData.balance = demoEquity;
+      demoData.equityData = equityChart.data;
+      localStorage.setItem('quantum_edge_demo_cache', JSON.stringify(demoData));
+
+      // Update balance text
       const balEl = $('balance-value');
       if (balEl) {
         balEl.textContent = '$' + demoEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
