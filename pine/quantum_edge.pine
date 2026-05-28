@@ -285,12 +285,12 @@ float minScoreRange = 5.0
 bool canTrade = currentRegime != "volatile" and strategy.position_size == 0
 
 bool longEntry = canTrade and (
-     (currentRegime == "trending" and longScore  >= minScoreTrend) or
-     (currentRegime == "ranging"  and longScore  >= minScoreRange))
+     (currentRegime == "trending" and emaBullish and longScore  >= minScoreTrend) or
+     (currentRegime == "ranging"  and rsiValue < 50 and longScore  >= minScoreRange))
 
 bool shortEntry = canTrade and (
-     (currentRegime == "trending" and shortScore >= minScoreTrend) or
-     (currentRegime == "ranging"  and shortScore >= minScoreRange))
+     (currentRegime == "trending" and emaBearish and shortScore >= minScoreTrend) or
+     (currentRegime == "ranging"  and rsiValue > 50 and shortScore >= minScoreRange))
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -302,11 +302,15 @@ float tpMult    = currentRegime == "trending" ? tpMultTrend    : tpMultRange
 
 var float trailStop = na
 var float entryBar  = na
+var float entrySL   = na
+var float entryTP   = na
 
 // Reset when flat
 if strategy.position_size == 0
     trailStop := na
     entryBar  := na
+    entrySL   := na
+    entryTP   := na
 
 // ── JSON Webhook Payloads ──
 string longMsg = '{"passphrase":"' + passphrase + '","action":"buy","ticker":"' + syminfo.ticker + '","price":' + str.tostring(close) + ',"regime":"' + currentRegime + '","signal_score":' + str.tostring(longScore) + ',"confidence":' + str.tostring(longScore / 10.0) + ',"factors":{"ema":' + str.tostring(emaScoreLong) + ',"rsi":' + str.tostring(rsiScoreLong) + ',"macd":' + str.tostring(macdScoreLong) + ',"bb":' + str.tostring(bbScoreLong) + ',"volume":' + str.tostring(volScore) + ',"squeeze":' + str.tostring(sqzScore) + ',"htf":' + str.tostring(htfScoreLong) + ',"adx":' + str.tostring(adxValue) + '},"atr":' + str.tostring(atr) + ',"stop_loss":' + str.tostring(close - atr * trailMult) + ',"take_profit":' + str.tostring(close + atr * tpMult) + ',"comment":"' + currentRegime + ' Long | Score: ' + str.tostring(longScore, "#.#") + '/10"}'
@@ -319,30 +323,36 @@ string closeShortMsg = '{"passphrase":"' + passphrase + '","action":"close_short
 // ── Entry Execution ──
 if longEntry
     float sl = close - (atr * trailMult)
+    float tp = close + (atr * tpMult)
     strategy.entry("Long", strategy.long, alert_message=longMsg)
     trailStop := sl
+    entrySL   := sl
+    entryTP   := tp
     entryBar  := bar_index
 
 if shortEntry
     float sl = close + (atr * trailMult)
+    float tp = close - (atr * tpMult)
     strategy.entry("Short", strategy.short, alert_message=shortMsg)
     trailStop := sl
+    entrySL   := sl
+    entryTP   := tp
     entryBar  := bar_index
 
 // ── Trailing Stop Update & Exit Orders ──
 if strategy.position_size > 0
-    trailStop := math.max(nz(trailStop, close - atr * trailMult), close - (atr * trailMult))
-    strategy.exit("Exit Long", from_entry="Long", stop=trailStop, limit=close + (atr * tpMult), alert_message=closeLongMsg)
+    trailStop := math.max(nz(trailStop, entrySL), close - (atr * trailMult))
+    strategy.exit("Exit Long", from_entry="Long", stop=trailStop, limit=entryTP, alert_message=closeLongMsg)
 
 if strategy.position_size < 0
-    trailStop := math.min(nz(trailStop, close + atr * trailMult), close + (atr * trailMult))
-    strategy.exit("Exit Short", from_entry="Short", stop=trailStop, limit=close - (atr * tpMult), alert_message=closeShortMsg)
+    trailStop := math.min(nz(trailStop, entrySL), close + (atr * trailMult))
+    strategy.exit("Exit Short", from_entry="Short", stop=trailStop, limit=entryTP, alert_message=closeShortMsg)
 
 // ── Time-Based Exit ──
 if strategy.position_size != 0 and not na(entryBar) and (bar_index - entryBar) >= maxBarsInTrade
-    if strategy.position_size > 0 and close < strategy.position_avg_price
+    if strategy.position_size > 0
         strategy.close("Long", comment="Time exit", alert_message=closeLongMsg)
-    if strategy.position_size < 0 and close > strategy.position_avg_price
+    if strategy.position_size < 0
         strategy.close("Short", comment="Time exit", alert_message=closeShortMsg)
 
 
